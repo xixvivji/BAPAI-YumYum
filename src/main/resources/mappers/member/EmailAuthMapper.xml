@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.ssafy.bapai.member.dao.EmailAuthDao">
+
+    <insert id="save" parameterType="com.ssafy.bapai.member.dto.EmailAuthDto">
+        INSERT INTO email_auth (email, auth_code, expired_at, is_verified, created_at)
+        VALUES (#{email}, #{authCode}, #{expiredAt}, 0, NOW())
+    </insert>
+
+    <select id="findRecentByEmail" parameterType="string"
+            resultType="com.ssafy.bapai.member.dto.EmailAuthDto">
+        SELECT *
+        FROM email_auth
+        WHERE email = #{email}
+        ORDER BY created_at DESC
+        LIMIT 1
+    </select>
+
+    <update id="updateVerified" parameterType="long">
+        UPDATE email_auth
+        SET is_verified = 1
+        WHERE auth_id = #{authId}
+    </update>
+
+</mapper>
