@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.ssafy.bapai.member.dao.RefreshTokenDao">
+
+    <insert id="save" parameterType="com.ssafy.bapai.member.dto.RefreshTokenDto">
+        INSERT INTO refresh_token (rt_key, rt_value, expiration)
+        VALUES (#{rtKey}, #{rtValue}, #{expiration}) ON DUPLICATE KEY
+        UPDATE
+            rt_value = #{rtValue},
+            expiration = #{expiration}
+    </insert>
+
+    <select id="findToken" parameterType="string" resultType="string">
+        SELECT rt_value
+        FROM refresh_token
+        WHERE rt_key = #{rtKey}
+    </select>
+
+    <delete id="delete" parameterType="string">
+        DELETE
+        FROM refresh_token
+        WHERE rt_key = #{rtKey}
+    </delete>
+
+    <delete id="deleteExpiredTokens">
+        DELETE
+        FROM refresh_token
+        WHERE expiration &lt; NOW()
+    </delete>
+
+</mapper>
