@@ -34,7 +34,7 @@ public interface MemberService {
     void withdraw(Long userId);
 
     //10. 비밀번호 초기화
-    boolean resetPassword(String email, String code, String newPassword);
+    boolean resetPassword(String loginId, String email, String code, String newPassword);
 
     // 소셜 로그인 (가입 안 되어 있으면 자동 가입)
     MemberDto socialLogin(String email, String name, String provider, String providerId);

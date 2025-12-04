@@ -218,18 +218,38 @@ public class MemberRestController {
         }
     }
 
-    // 1-8. 비밀번호 찾기 (재설정)
+    // 아이디찾기
+    @PostMapping("/auth/find-id")
+    public ResponseEntity<?> findId(@RequestBody Map<String, String> req) {
+        try {
+            String loginId = memberService.findLoginId(req.get("email"), req.get("code"));
+            return ResponseEntity.ok(Map.of("loginId", loginId));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+
+    // 1-8. ★ [추가됨] 비밀번호 찾기 1단계 (본인 확인)
+    @PostMapping("/auth/verify-reset")
+    public ResponseEntity<?> verifyForReset(@RequestBody Map<String, String> req) {
+        boolean isValid = memberService.verifyUserForReset(req.get("loginId"), req.get("email"),
+                req.get("code"));
+        if (isValid) {
+            return ResponseEntity.ok(Map.of("success", true));
+        }
+        return ResponseEntity.badRequest().body(Map.of("success", false, "message", "정보 불일치"));
+    }
+
+    // 1-9. 비밀번호 찾기 2단계 (변경)
     @PostMapping("/auth/reset-password")
     public ResponseEntity<?> resetPassword(@RequestBody Map<String, String> req) {
-        String email = req.get("email");
-        String code = req.get("code");
-        String newPassword = req.get("newPassword");
-
-        if (memberService.resetPassword(email, code, newPassword)) {
+        boolean result =
+                memberService.resetPassword(req.get("loginId"), req.get("email"), req.get("code"),
+                        req.get("newPassword"));
+        if (result) {
             return ResponseEntity.ok("비밀번호가 변경되었습니다.");
-        } else {
-            return ResponseEntity.badRequest().body("인증 실패 또는 회원 정보 없음");
         }
+        return ResponseEntity.badRequest().body("변경 실패");
     }
 
     // 1-9 리프레쉬 토큰 재발급
