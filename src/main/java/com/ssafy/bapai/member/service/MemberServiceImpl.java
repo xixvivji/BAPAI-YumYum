@@ -15,21 +15,19 @@ public class MemberServiceImpl implements MemberService {
     private final EmailService emailService;
     private final PasswordEncoder passwordEncoder;
 
-    // 1. 회원가입 (일반)
+    // 1. 회원가입
     @Override
     @Transactional
     public void signup(MemberDto member) {
-        // 비밀번호 암호화 후 저장
         String encodedPwd = passwordEncoder.encode(member.getPassword());
         member.setPassword(encodedPwd);
-
         memberDao.insertMember(member);
     }
 
-    // 2. 로그인 (비밀번호 검증)
+    // 2. 로그인 (아이디로 로그인)
     @Override
     public MemberDto login(String loginId, String password) {
-        // [수정] 이메일 대신 loginId로 찾기
+        // [수정] 이메일이 아니라 loginId로 조회
         MemberDto member = memberDao.selectMemberByLoginId(loginId);
 
         if (member == null || "WITHDRAWN".equals(member.getStatus())) {
@@ -43,13 +41,13 @@ public class MemberServiceImpl implements MemberService {
         return member;
     }
 
-    // 3. 회원 정보 조회
+    // 3. 회원 조회
     @Override
     public MemberDto getMember(Long userId) {
         return memberDao.selectMemberById(userId);
     }
 
-    // 4. 회원 정보 수정
+    // 4. 정보 수정
     @Override
     @Transactional
     public void updateMember(MemberDto member) {
@@ -65,18 +63,22 @@ public class MemberServiceImpl implements MemberService {
     // 6. 닉네임 중복 체크
     @Override
     public boolean isNicknameDuplicate(String nickname) {
-
         return memberDao.checkNickname(nickname) > 0;
     }
 
-    // 7. 비밀번호 확인 (수정 전 본인확인)
+    // [추가] 아이디 중복 체크
+    @Override
+    public boolean isLoginIdDuplicate(String loginId) {
+        return memberDao.checkLoginId(loginId) > 0;
+    }
+
+    // 7. 비밀번호 확인
     @Override
     public boolean checkPassword(Long userId, String rawPassword) {
         MemberDto member = memberDao.selectMemberById(userId);
         if (member == null) {
             return false;
         }
-        // 암호화된 비밀번호와 비교
         return passwordEncoder.matches(rawPassword, member.getPassword());
     }
 
@@ -84,7 +86,6 @@ public class MemberServiceImpl implements MemberService {
     @Override
     @Transactional
     public void updatePassword(Long userId, String newPassword) {
-        // 새 비밀번호 암호화
         String encodedPwd = passwordEncoder.encode(newPassword);
         memberDao.updatePassword(userId, encodedPwd);
     }
@@ -96,78 +97,84 @@ public class MemberServiceImpl implements MemberService {
         memberDao.deleteMember(userId);
     }
 
-    // 10. 비밀번호 초기화 (이메일 인증 필수)
+    // 10. 아이디 찾기 (이메일 인증 후)
     @Override
-    @Transactional
-    public boolean resetPassword(String email, String code, String newPassword) {
-        // (1) 인증 번호 검증
+    public String findLoginId(String email, String code) {
+        if (!emailService.verifyCode(email, code)) {
+            throw new IllegalArgumentException("인증번호가 틀렸습니다.");
+        }
+        MemberDto member = memberDao.selectMemberByEmail(email);
+        if (member == null) {
+            throw new IllegalArgumentException("가입된 이메일이 없습니다.");
+        }
+        if (!"LOCAL".equals(member.getProvider())) {
+            throw new IllegalArgumentException("소셜 로그인 회원입니다.");
+        }
+
+        return member.getLoginId();
+    }
+
+    // 11. 비밀번호 재설정 전 본인확인
+    @Override
+    public boolean verifyUserForReset(String loginId, String email, String code) {
         if (!emailService.verifyCode(email, code)) {
             return false;
         }
+        MemberDto member = memberDao.selectMemberByLoginIdAndEmail(loginId, email);
+        return member != null && "LOCAL".equals(member.getProvider());
+    }
 
-        // (2) 회원 조회
-        MemberDto member = memberDao.selectMemberByEmail(email);
-        if (member == null) {
+    // 12. 비밀번호 초기화 (재설정)
+    @Override
+    @Transactional
+    public boolean resetPassword(String loginId, String email, String code, String newPassword) {
+        if (!verifyUserForReset(loginId, email, code)) {
             return false;
         }
 
-        // (3) 소셜 로그인 유저는 비밀번호 변경 불가 (LOCAL만 가능)
-        if (!"LOCAL".equals(member.getProvider())) {
-            return false;
-        }
-
-        // (4) 비밀번호 암호화 후 업데이트
+        MemberDto member = memberDao.selectMemberByLoginId(loginId);
         String encodedPwd = passwordEncoder.encode(newPassword);
         memberDao.updatePassword(member.getUserId(), encodedPwd);
         return true;
     }
 
-    // 11. 소셜 로그인 (닉네임 중복 처리 로직 추가됨 ★)
+    // 13. 소셜 로그인 (아이디 자동 생성 추가)
     @Override
     @Transactional
     public MemberDto socialLogin(String email, String name, String provider, String providerId) {
-        // 1. DB 조회
         MemberDto member = memberDao.selectMemberByEmail(email);
 
-        // 2. 없으면 자동 회원가입 (GUEST)
         if (member == null) {
-            // 생성 및 중복 방지
-            String nickname = name; // 기본적으로 소셜 이름을 닉네임으로 사용
-
-            // 만약 닉네임이 이미 존재하면-> 뒤에 랜덤 숫자 붙이기 반복
-            // (예: 김싸피 -> 김싸피_1234)
+            // 1. 닉네임 중복 처리
+            String nickname = name;
             while (memberDao.checkNickname(nickname) > 0) {
-                int randomNum = (int) (Math.random() * 9000) + 1000; // 1000~9999
+                int randomNum = (int) (Math.random() * 9000) + 1000;
                 nickname = name + "_" + randomNum;
+            }
+
+            // 2. [중요] 로그인 아이디(loginId) 자동 생성 (예: kakao_123456)
+            String loginId = provider.toLowerCase() + "_" + providerId;
+            if (loginId.length() > 50) {
+                loginId = loginId.substring(0, 50); // 길이 제한 방지
             }
 
             member = MemberDto.builder()
                     .email(email)
-                    .name(name)           // 실명
-                    .nickname(nickname)   // 닉네임
+                    .name(name)
+                    .nickname(nickname)
+                    .loginId(loginId)     // [추가됨] 이거 없으면 에러남!
                     .provider(provider)
                     .providerId(providerId)
-                    .role("ROLE_GUEST")   // 추가 정보 필요
+                    .role("ROLE_GUEST")
                     .status("ACTIVE")
                     .build();
 
-            // 소셜은 비밀번호 없음 (임의값)
             member.setPassword("SOCIAL_LOGIN");
-
             memberDao.insertMember(member);
-
-            // 방금 넣은 거 다시 조회 (PK 확보)
             member = memberDao.selectMemberByEmail(email);
         }
 
-        // 3. 로그인 처리
         memberDao.updateLastLogin(member.getUserId());
-
         return member;
-    }
-
-    @Override
-    public boolean isLoginIdDuplicate(String loginId) {
-        return memberDao.checkLoginId(loginId) > 0;
     }
 }
