@@ -7,6 +7,11 @@ import com.ssafy.bapai.member.dto.RefreshTokenDto;
 import com.ssafy.bapai.member.service.EmailService;
 import com.ssafy.bapai.member.service.MemberService;
 import com.ssafy.bapai.member.service.OAuthService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.HashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +30,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api")
 @RequiredArgsConstructor
-//@CrossOrigin("*") // Vue.js와 통신을 위해 CORS 허용
+// @CrossOrigin("*") // SecurityConfig에서 처리하므로 주석 처리
+@Tag(name = "1. 회원(Member) API", description = "회원가입, 로그인, 마이페이지 등 회원 관련 기능") // [추가]
 public class MemberRestController {
 
     private final MemberService memberService;
@@ -33,11 +39,18 @@ public class MemberRestController {
     private final JwtUtil jwtUtil;
     private final OAuthService oAuthService;
     private final RefreshTokenDao refreshTokenDao;
+
     // ==========================
     // [1. 인증 & 가입]
     // ==========================
 
-    // 1-1. 일반 회원가입 (1단계: 계정 생성)
+    @Operation(summary = "일반 회원가입 (1단계)", description = "아이디, 이메일, 비밀번호, 이름, 닉네임을 입력받아 계정을 생성합니다.")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            content = @Content(
+                    mediaType = "application/json",
+                    examples = @ExampleObject(value = "{\"loginId\": \"ssafy_king\", \"email\": \"test@ssafy.com\", \"password\": \"1234\", \"name\": \"김싸피\", \"nickname\": \"냠냠박사\"}")
+            )
+    )
     @PostMapping("/auth/signup")
     public ResponseEntity<?> signup(@RequestBody MemberDto member) {
         try {
@@ -49,30 +62,32 @@ public class MemberRestController {
         }
     }
 
-    // 1-2. 일반 로그인
+    @Operation(summary = "일반 로그인", description = "아이디와 비밀번호로 로그인하여 JWT 토큰을 발급받습니다.")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            content = @Content(
+                    mediaType = "application/json",
+                    examples = @ExampleObject(value = "{\"loginId\": \"ssafy_king\", \"password\": \"1234\"}")
+            )
+    )
     @PostMapping("/auth/login")
     public ResponseEntity<?> login(@RequestBody MemberDto member) {
-        MemberDto loginUser = memberService.login(member.getEmail(), member.getPassword());
+        MemberDto loginUser = memberService.login(member.getLoginId(), member.getPassword());
 
         if (loginUser != null) {
             // 1. Access Token (1시간)
             String accessToken =
                     jwtUtil.createToken(loginUser.getUserId(), loginUser.getRole(), 1000 * 60 * 60);
-
             // 2. Refresh Token (2주)
-            long refreshTokenExpireTime = 1000L * 60 * 60 * 24 * 14; // 2주 (밀리초)
+            long refreshTokenExpireTime = 1000L * 60 * 60 * 24 * 14;
             String refreshToken = jwtUtil.createToken(loginUser.getUserId(), loginUser.getRole(),
                     refreshTokenExpireTime);
 
-
-            String expirationStr = java.time.LocalDateTime.now().plusDays(14).toString();
-
-
             // 3. DB 저장
+            String expirationStr = java.time.LocalDateTime.now().plusDays(14).toString();
             RefreshTokenDto rtDto = RefreshTokenDto.builder()
                     .rtKey(String.valueOf(loginUser.getUserId()))
                     .rtValue(refreshToken)
-                    .expiration(expirationStr) // ★ [수정] null 대신 실제 만료 시간 입력!
+                    .expiration(expirationStr)
                     .build();
             refreshTokenDao.save(rtDto);
 
@@ -85,58 +100,64 @@ public class MemberRestController {
 
             return ResponseEntity.ok(result);
         } else {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("로그인 실패");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("아이디 또는 비밀번호가 일치하지 않습니다.");
         }
     }
 
-    // 1-3. 카카오 로그인
+    @Operation(summary = "카카오 로그인", description = "카카오 인가 코드를 받아 회원가입 및 로그인을 처리합니다.")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            content = @Content(
+                    examples = @ExampleObject(value = "{\"code\": \"카카오_인증_코드\"}")
+            )
+    )
     @PostMapping("/auth/kakao")
     public ResponseEntity<?> kakaoLogin(@RequestBody Map<String, String> req) {
         return processSocialLogin("KAKAO", req.get("code"));
     }
 
-    // 1-4. 구글 로그인
+    @Operation(summary = "구글 로그인")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            content = @Content(examples = @ExampleObject(value = "{\"code\": \"구글_인증_코드\"}"))
+    )
     @PostMapping("/auth/google")
     public ResponseEntity<?> googleLogin(@RequestBody Map<String, String> req) {
         return processSocialLogin("GOOGLE", req.get("code"));
     }
 
-    // 1-5. 네이버 로그인 (추후 구현)
+    @Operation(summary = "네이버 로그인")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            content = @Content(examples = @ExampleObject(value = "{\"code\": \"네이버_인증_코드\"}"))
+    )
     @PostMapping("/auth/naver")
     public ResponseEntity<?> naverLogin(@RequestBody Map<String, String> req) {
         return processSocialLogin("NAVER", req.get("code"));
     }
 
-    // [공통 로직 메서드] - 중복 코드를 제거하기 위해 별도로 뺌
+    // [공통 로직]
     private ResponseEntity<?> processSocialLogin(String provider, String code) {
         try {
-            // 1. 액세스 토큰 요청
             String accessToken = oAuthService.getAccessToken(provider, code);
-
-            // 2. 사용자 정보 요청
             Map<String, Object> userInfo = oAuthService.getUserInfo(provider, accessToken);
+
             String email = (String) userInfo.get("email");
             String name = (String) userInfo.get("name");
             String providerId = (String) userInfo.get("providerId");
 
-            // 3. 로그인/가입 로직 진행
             MemberDto member = memberService.socialLogin(email, name, provider, providerId);
 
-            // 4. JWT 발급 (Access + Refresh)
             String token =
                     jwtUtil.createToken(member.getUserId(), member.getRole(), 1000 * 60 * 60);
             String refreshToken = jwtUtil.createToken(member.getUserId(), member.getRole(),
                     1000L * 60 * 60 * 24 * 14);
 
-            // 5. Refresh Token 저장
+            String expirationStr = java.time.LocalDateTime.now().plusDays(14).toString();
             RefreshTokenDto rtDto = RefreshTokenDto.builder()
                     .rtKey(String.valueOf(member.getUserId()))
                     .rtValue(refreshToken)
-                    .expiration(java.time.LocalDateTime.now().plusWeeks(2).toString())
+                    .expiration(expirationStr)
                     .build();
             refreshTokenDao.save(rtDto);
 
-            // 6. 응답 생성
             Map<String, Object> result = new HashMap<>();
             result.put("accessToken", token);
             result.put("refreshToken", refreshToken);
@@ -145,80 +166,75 @@ public class MemberRestController {
             result.put("isHealthInfoNeeded", "ROLE_GUEST".equals(member.getRole()));
 
             return ResponseEntity.ok(result);
-
         } catch (Exception e) {
             e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(provider + " 로그인 실패: " + e.getMessage());
+                    .body("소셜 로그인 실패: " + e.getMessage());
         }
     }
 
-    // 1-4. 로그아웃
+    @Operation(summary = "로그아웃", description = "DB에서 리프레시 토큰을 삭제합니다.")
     @PostMapping("/auth/logout")
     public ResponseEntity<?> logout(@RequestHeader("Authorization") String token) {
         Long userId = jwtUtil.getUserId(token);
-        refreshTokenDao.delete(String.valueOf(userId)); // DB에서 삭제
+        refreshTokenDao.delete(String.valueOf(userId));
         return ResponseEntity.ok(Map.of("success", true, "message", "로그아웃 되었습니다."));
     }
 
-    // 1-5.1. 이메일 중복 체크
+    @Operation(summary = "이메일 중복 체크")
     @GetMapping("/auth/check-email")
-    public ResponseEntity<?> checkEmail(@RequestParam String email) {
+    public ResponseEntity<?> checkEmail(
+            @Parameter(description = "확인할 이메일") @RequestParam String email) {
         if (memberService.isEmailDuplicate(email)) {
-            // 중복이면 409 에러를 던짐
             return ResponseEntity.status(HttpStatus.CONFLICT).body("이미 사용 중인 이메일입니다.");
         }
-        // 사용 가능하면 200 OK
         return ResponseEntity.ok("사용 가능한 이메일입니다.");
     }
 
-    // 1-5.2. 닉네임 중복 체크
+    @Operation(summary = "닉네임 중복 체크")
     @GetMapping("/auth/check-nickname")
-    public ResponseEntity<?> checkNickname(@RequestParam String nickname) {
+    public ResponseEntity<?> checkNickname(
+            @Parameter(description = "확인할 닉네임") @RequestParam String nickname) {
         if (memberService.isNicknameDuplicate(nickname)) {
-            // 중복이면 409 에러를 던짐
             return ResponseEntity.status(HttpStatus.CONFLICT).body("이미 사용 중인 닉네임입니다.");
         }
-        // 사용 가능하면 200 OK
         return ResponseEntity.ok("사용 가능한 닉네임입니다.");
     }
 
-    // 1-5.3. 아이디 중복 체크 (추가)
+    @Operation(summary = "아이디 중복 체크")
     @GetMapping("/auth/check-id")
-    public ResponseEntity<?> checkLoginId(@RequestParam String loginId) {
+    public ResponseEntity<?> checkLoginId(
+            @Parameter(description = "확인할 아이디") @RequestParam String loginId) {
         if (memberService.isLoginIdDuplicate(loginId)) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body("이미 사용 중인 아이디입니다.");
         }
         return ResponseEntity.ok("사용 가능한 아이디입니다.");
     }
 
-    // 1-6. 이메일 인증번호 전송
+    @Operation(summary = "이메일 인증번호 발송")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(content = @Content(examples = @ExampleObject(value = "{\"email\": \"test@ssafy.com\"}")))
     @PostMapping("/auth/email/send")
     public ResponseEntity<?> sendEmail(@RequestBody Map<String, String> req) {
-        String email = req.get("email");
         try {
-            emailService.sendVerificationCode(email);
-            return ResponseEntity.ok(Map.of("message", "인증번호가 발송되었습니다. (유효시간 5분)"));
+            emailService.sendVerificationCode(req.get("email"));
+            return ResponseEntity.ok(Map.of("message", "인증번호 발송 완료"));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("메일 발송 실패: " + e.getMessage());
+                    .body("발송 실패: " + e.getMessage());
         }
     }
 
-    // 1-7. 이메일 인증번호 확인
+    @Operation(summary = "이메일 인증번호 확인")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(content = @Content(examples = @ExampleObject(value = "{\"email\": \"test@ssafy.com\", \"code\": \"123456\"}")))
     @PostMapping("/auth/email/verify")
     public ResponseEntity<?> verifyEmail(@RequestBody Map<String, String> req) {
-        String email = req.get("email");
-        String code = req.get("code");
-
-        if (emailService.verifyCode(email, code)) {
-            return ResponseEntity.ok(Map.of("success", true, "message", "인증 성공"));
-        } else {
-            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "인증 실패"));
+        if (emailService.verifyCode(req.get("email"), req.get("code"))) {
+            return ResponseEntity.ok(Map.of("success", true));
         }
+        return ResponseEntity.badRequest().body(Map.of("success", false));
     }
 
-    // 아이디찾기
+    @Operation(summary = "아이디 찾기", description = "이메일 인증 후 아이디를 반환합니다.")
     @PostMapping("/auth/find-id")
     public ResponseEntity<?> findId(@RequestBody Map<String, String> req) {
         try {
@@ -229,7 +245,15 @@ public class MemberRestController {
         }
     }
 
-    // 1-8. ★ [추가됨] 비밀번호 찾기 1단계 (본인 확인)
+    // 1-8. 비밀번호 찾기 1단계 (본인확인)
+    @Operation(summary = "비밀번호 찾기 1단계 (본인확인)", description = "아이디, 이메일, 인증번호가 일치하는지 확인합니다.")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            content = @io.swagger.v3.oas.annotations.media.Content(
+                    examples = @io.swagger.v3.oas.annotations.media.ExampleObject(
+                            value = "{\"loginId\": \"ssafy_king\", \"email\": \"test01@ssafy.com\", \"code\": \"123456\"}"
+                    )
+            )
+    )
     @PostMapping("/auth/verify-reset")
     public ResponseEntity<?> verifyForReset(@RequestBody Map<String, String> req) {
         boolean isValid = memberService.verifyUserForReset(req.get("loginId"), req.get("email"),
@@ -241,6 +265,14 @@ public class MemberRestController {
     }
 
     // 1-9. 비밀번호 찾기 2단계 (변경)
+    @Operation(summary = "비밀번호 찾기 2단계 (변경)", description = "인증된 사용자의 비밀번호를 변경합니다.")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            content = @io.swagger.v3.oas.annotations.media.Content(
+                    examples = @io.swagger.v3.oas.annotations.media.ExampleObject(
+                            value = "{\"loginId\": \"ssafy_king\", \"email\": \"test01@ssafy.com\", \"code\": \"123456\", \"newPassword\": \"newPass1234\"}"
+                    )
+            )
+    )
     @PostMapping("/auth/reset-password")
     public ResponseEntity<?> resetPassword(@RequestBody Map<String, String> req) {
         boolean result =
@@ -252,111 +284,83 @@ public class MemberRestController {
         return ResponseEntity.badRequest().body("변경 실패");
     }
 
-    // 1-9 리프레쉬 토큰 재발급
+    @Operation(summary = "토큰 재발급 (Refresh)", description = "리프레시 토큰으로 새 액세스 토큰을 발급받습니다.")
     @PostMapping("/auth/refresh")
     public ResponseEntity<?> refreshToken(@RequestBody Map<String, String> req) {
         String refreshToken = req.get("refreshToken");
-
-        // 검증
         if (!jwtUtil.validateToken(refreshToken)) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("리프레시 토큰 만료. 다시 로그인하세요.");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("만료됨");
         }
 
         Long userId = jwtUtil.getUserId("Bearer " + refreshToken);
         String dbToken = refreshTokenDao.findToken(String.valueOf(userId));
 
         if (dbToken == null || !dbToken.equals(refreshToken)) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("유효하지 않은 토큰입니다.");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("유효하지 않음");
         }
 
-        // 새 토큰 발급
         String newAccessToken = jwtUtil.createToken(userId, "ROLE_USER", 1000 * 60 * 60);
-
         return ResponseEntity.ok(Map.of("accessToken", newAccessToken));
     }
 
+
     // ==========================
-    // [2. 회원 정보 & 건강] (여기부터는 토큰 필수!)
+    // [2. 회원 정보 & 건강] (토큰 필수)
     // ==========================
 
-    // 2-1. 건강 정보 입력 (2단계: Guest -> User 등업)
-//    @PutMapping("/members/health")
-//    public ResponseEntity<?> updateHealthInfo(@RequestHeader("Authorization") String token,
-//                                              @RequestBody MemberDto member) {
-//        Long userId = jwtUtil.getUserId(token);
-//        member.setUserId(userId);
-//        member.setRole("ROLE_USER");
-//
-//        memberService.updateMember(member);
-//
-//        String newToken = jwtUtil.createToken(userId, "ROLE_USER");
-//        return ResponseEntity.ok(Map.of("message", "완료", "accessToken", newToken));
-//    }
-
-    // 2-2. 내 정보 조회
-    @GetMapping("/members/me")
-    public ResponseEntity<?> getMyInfo(@RequestHeader("Authorization") String token) {
-        Long userId = jwtUtil.getUserId(token);
-        MemberDto member = memberService.getMember(userId);
-
-        if (member != null) {
-            member.setPassword(null);
-            return ResponseEntity.ok(member);
-        }
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body("회원 정보를 찾을 수 없습니다.");
-    }
-
-    // 2-3. 정보 수정 (마이페이지) / 회원건강정보 입력
-
-    @PatchMapping("/members/me")
+    @Operation(summary = "건강 정보 입력 (2단계)", description = "신체 정보를 입력하고 정회원(USER)으로 등업합니다.")
+    @PatchMapping("/members/me") // Patch로 통합됨
     public ResponseEntity<?> updateMyInfo(@RequestHeader("Authorization") String token,
                                           @RequestBody MemberDto member) {
         Long userId = jwtUtil.getUserId(token);
         member.setUserId(userId);
 
-        // 1. 현재 유저 정보 조회
         MemberDto currentMember = memberService.getMember(userId);
 
-        // 2. 등업 로직 (GUEST -> USER)
-        // 만약 키/몸무게 등 필수 정보가 들어왔고, 현재 권한이 GUEST라면 등업시켜줌
         if ("ROLE_GUEST".equals(currentMember.getRole()) &&
                 member.getHeight() != null && member.getWeight() != null) {
             member.setRole("ROLE_USER");
         }
 
-        // 3. 정보 수정 (Dynamic Query로 들어온 값만 수정됨)
         memberService.updateMember(member);
 
-        // 4. 토큰 재발급 (권한이 바뀌었을 수 있으므로)
         String newToken = jwtUtil.createToken(userId,
                 member.getRole() != null ? member.getRole() : currentMember.getRole());
 
         return ResponseEntity.ok(Map.of("message", "수정 완료", "accessToken", newToken));
     }
 
+    @Operation(summary = "내 정보 조회")
+    @GetMapping("/members/me")
+    public ResponseEntity<?> getMyInfo(@RequestHeader("Authorization") String token) {
+        Long userId = jwtUtil.getUserId(token);
+        MemberDto member = memberService.getMember(userId);
+        if (member != null) {
+            member.setPassword(null);
+        }
+        return ResponseEntity.ok(member);
+    }
 
-    // 2-4. 비밀번호 확인 (수정 전 본인확인용)
+    @Operation(summary = "비밀번호 확인", description = "정보 수정 전 본인 확인용")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(content = @Content(examples = @ExampleObject(value = "{\"password\": \"1234\"}")))
     @PostMapping("/members/check-password")
     public ResponseEntity<?> checkPassword(@RequestHeader("Authorization") String token,
                                            @RequestBody Map<String, String> req) {
         Long userId = jwtUtil.getUserId(token);
-        String password = req.get("password");
-        boolean match = memberService.checkPassword(userId, password);
+        boolean match = memberService.checkPassword(userId, req.get("password"));
         return ResponseEntity.ok(Map.of("match", match));
     }
 
-    // 2-5. 비밀번호 변경
+    @Operation(summary = "비밀번호 변경")
     @PatchMapping("/members/password")
     public ResponseEntity<?> updatePassword(@RequestHeader("Authorization") String token,
                                             @RequestBody Map<String, String> req) {
         Long userId = jwtUtil.getUserId(token);
-        String newPassword = req.get("newPassword");
-        memberService.updatePassword(userId, newPassword);
+        memberService.updatePassword(userId, req.get("newPassword"));
         return ResponseEntity.ok("비밀번호 변경 완료");
     }
 
-
-    // 2-6. 회원 탈퇴
+    @Operation(summary = "회원 탈퇴")
     @DeleteMapping("/members/me")
     public ResponseEntity<?> withdraw(@RequestHeader("Authorization") String token) {
         Long userId = jwtUtil.getUserId(token);
