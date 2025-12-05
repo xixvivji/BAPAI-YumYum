@@ -27,7 +27,7 @@ public class MemberDto {
     @NotBlank(message = "아이디는 필수입니다.")
     @Size(min = 4, max = 20, message = "아이디는 4~20자여야 합니다.")
     @Schema(description = "로그인 아이디", example = "ssafy_king")
-    private String loginId;
+    private String username;
 
     @NotBlank(message = "이메일은 필수입니다.")
     @Email(message = "올바른 이메일 형식이 아닙니다.")
@@ -112,4 +112,7 @@ public class MemberDto {
 
     @Schema(description = "마지막 로그인 시간", hidden = true)
     private String lastLoginAt;
+
+    @Schema(description = "임시 비밀번호 여부", hidden = true)
+    private boolean isTempPassword;
 }

@@ -19,16 +19,21 @@ public class MemberServiceImpl implements MemberService {
     @Override
     @Transactional
     public void signup(MemberDto member) {
+        // 비밀번호 암호화
         String encodedPwd = passwordEncoder.encode(member.getPassword());
         member.setPassword(encodedPwd);
+
+        // ★ [추가] 일반 가입은 무조건 LOCAL로 설정!
+        member.setProvider("LOCAL");
+
         memberDao.insertMember(member);
     }
 
     // 2. 로그인 (아이디로 로그인)
     @Override
-    public MemberDto login(String loginId, String password) {
-        // [수정] 이메일이 아니라 loginId로 조회
-        MemberDto member = memberDao.selectMemberByLoginId(loginId);
+    public MemberDto login(String username, String password) {
+        // [수정] 이메일이 아니라 username 조회
+        MemberDto member = memberDao.selectMemberByUsername(username);
 
         if (member == null || "WITHDRAWN".equals(member.getStatus())) {
             return null;
@@ -68,8 +73,8 @@ public class MemberServiceImpl implements MemberService {
 
     // [추가] 아이디 중복 체크
     @Override
-    public boolean isLoginIdDuplicate(String loginId) {
-        return memberDao.checkLoginId(loginId) > 0;
+    public boolean isUsernameDuplicate(String username) {
+        return memberDao.checkUsername(username) > 0;
     }
 
     // 7. 비밀번호 확인
@@ -86,6 +91,13 @@ public class MemberServiceImpl implements MemberService {
     @Override
     @Transactional
     public void updatePassword(Long userId, String newPassword) {
+        MemberDto member = memberDao.selectMemberById(userId);
+
+        // [추가] 기존 비밀번호 재사용 방지
+        if (passwordEncoder.matches(newPassword, member.getPassword())) {
+            throw new IllegalArgumentException("현재 사용 중인 비밀번호입니다.");
+        }
+
         String encodedPwd = passwordEncoder.encode(newPassword);
         memberDao.updatePassword(userId, encodedPwd);
     }
@@ -99,7 +111,7 @@ public class MemberServiceImpl implements MemberService {
 
     // 10. 아이디 찾기 (이메일 인증 후)
     @Override
-    public String findLoginId(String email, String code) {
+    public String findUsername(String email, String code) {
         if (!emailService.verifyCode(email, code)) {
             throw new IllegalArgumentException("인증번호가 틀렸습니다.");
         }
@@ -111,30 +123,41 @@ public class MemberServiceImpl implements MemberService {
             throw new IllegalArgumentException("소셜 로그인 회원입니다.");
         }
 
-        return member.getLoginId();
+        return member.getUsername();
     }
 
     // 11. 비밀번호 재설정 전 본인확인
     @Override
-    public boolean verifyUserForReset(String loginId, String email, String code) {
+    public boolean verifyUserForReset(String username, String email, String code) {
         if (!emailService.verifyCode(email, code)) {
             return false;
         }
-        MemberDto member = memberDao.selectMemberByLoginIdAndEmail(loginId, email);
+        MemberDto member = memberDao.selectMemberByUsernameAndEmail(username, email);
         return member != null && "LOCAL".equals(member.getProvider());
     }
 
-    // 12. 비밀번호 초기화 (재설정)
     @Override
-    @Transactional
-    public boolean resetPassword(String loginId, String email, String code, String newPassword) {
-        if (!verifyUserForReset(loginId, email, code)) {
+    public boolean resetPassword(String username, String email, String code) {
+        // 1. 본인 확인 (아이디+이메일+인증코드)
+        if (!verifyUserForReset(username, email, code)) {
             return false;
         }
 
-        MemberDto member = memberDao.selectMemberByLoginId(loginId);
-        String encodedPwd = passwordEncoder.encode(newPassword);
-        memberDao.updatePassword(member.getUserId(), encodedPwd);
+        // 2. 임시 비밀번호 생성 (랜덤 8자리 문자열)
+        String tempPassword = java.util.UUID.randomUUID().toString().substring(0, 8);
+
+        // 3. DB 업데이트 (암호화 저장 + 임시비번 플래그 ON)
+        MemberDto member = memberDao.selectMemberByUsername(username);
+        String encodedPwd = passwordEncoder.encode(tempPassword);
+
+        // (MemberDao에 updateTempPassword 메서드 추가 필요)
+        member.setPassword(encodedPwd);
+        member.setTempPassword(true); // ★ 핵심: 임시 비번 상태로 변경
+        memberDao.updateTempPassword(member); // 쿼리 새로 만들기
+
+        // 4. 이메일 발송
+        emailService.sendTempPassword(email, tempPassword);
+
         return true;
     }
 
@@ -152,22 +175,22 @@ public class MemberServiceImpl implements MemberService {
                 nickname = name + "_" + randomNum;
             }
 
-            // 2. [중요] 로그인 아이디(loginId) 자동 생성 (예: kakao_123456)
-            String loginId = provider.toLowerCase() + "_" + providerId;
-            if (loginId.length() > 50) {
-                loginId = loginId.substring(0, 50); // 길이 제한 방지
+            // 2. [중요] 로그인 아이디(username) 자동 생성 (예: kakao_123456)
+            String username = provider.toLowerCase() + "_" + providerId;
+            if (username.length() > 50) {
+                username = username.substring(0, 50); // 길이 제한 방지
             }
 
             member = MemberDto.builder()
                     .email(email)
                     .name(name)
                     .nickname(nickname)
-                    .loginId(loginId)     // [추가됨] 이거 없으면 에러남!
+                    .username(username)     // [추가됨] 이거 없으면 에러남!
                     .provider(provider)
                     .providerId(providerId)
                     .role("ROLE_GUEST")
                     .status("ACTIVE")
-                    .build();
+                    .isTempPassword(false).build();
 
             member.setPassword("SOCIAL_LOGIN");
             memberDao.insertMember(member);
