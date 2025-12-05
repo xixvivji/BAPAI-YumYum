@@ -48,7 +48,7 @@ public class MemberRestController {
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             content = @Content(
                     mediaType = "application/json",
-                    examples = @ExampleObject(value = "{\"loginId\": \"ssafy_king\", \"email\": \"test@ssafy.com\", \"password\": \"1234\", \"name\": \"김싸피\", \"nickname\": \"냠냠박사\"}")
+                    examples = @ExampleObject(value = "{\"username\": \"ssafy_king\", \"email\": \"test@ssafy.com\", \"password\": \"1234\", \"name\": \"김싸피\", \"nickname\": \"냠냠박사\"}")
             )
     )
     @PostMapping("/auth/signup")
@@ -66,12 +66,12 @@ public class MemberRestController {
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             content = @Content(
                     mediaType = "application/json",
-                    examples = @ExampleObject(value = "{\"loginId\": \"ssafy_king\", \"password\": \"1234\"}")
+                    examples = @ExampleObject(value = "{\"username\": \"ssafy_king\", \"password\": \"1234\"}")
             )
     )
     @PostMapping("/auth/login")
     public ResponseEntity<?> login(@RequestBody MemberDto member) {
-        MemberDto loginUser = memberService.login(member.getLoginId(), member.getPassword());
+        MemberDto loginUser = memberService.login(member.getUsername(), member.getPassword());
 
         if (loginUser != null) {
             // 1. Access Token (1시간)
@@ -97,7 +97,7 @@ public class MemberRestController {
             result.put("role", loginUser.getRole());
             result.put("name", loginUser.getName());
             result.put("isHealthInfoNeeded", "ROLE_GUEST".equals(loginUser.getRole()));
-
+            result.put("isTempPassword", loginUser.isTempPassword());
             return ResponseEntity.ok(result);
         } else {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("아이디 또는 비밀번호가 일치하지 않습니다.");
@@ -202,13 +202,58 @@ public class MemberRestController {
     }
 
     @Operation(summary = "아이디 중복 체크")
-    @GetMapping("/auth/check-id")
-    public ResponseEntity<?> checkLoginId(
-            @Parameter(description = "확인할 아이디") @RequestParam String loginId) {
-        if (memberService.isLoginIdDuplicate(loginId)) {
+    @GetMapping("/auth/check-username")
+    public ResponseEntity<?> checkUsername(
+            @Parameter(description = "확인할 아이디") @RequestParam String username) {
+        if (memberService.isUsernameDuplicate(username)) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body("이미 사용 중인 아이디입니다.");
         }
         return ResponseEntity.ok("사용 가능한 아이디입니다.");
+    }
+
+    @Operation(summary = "비밀번호 찾기 (임시 비밀번호 발송)", description = "인증된 사용자에게 임시 비밀번호를 이메일로 발송합니다.")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            content = @Content(
+                    mediaType = "application/json",
+                 
+                    examples = @ExampleObject(
+                            value = "{\"username\": \"ssafy_king\", \"email\": \"test01@ssafy.com\", \"code\": \"123456\"}"
+                    )
+            )
+    )
+    @PostMapping("/auth/reset-password")
+    public ResponseEntity<?> resetPassword(@RequestBody Map<String, String> req) {
+
+        boolean result = memberService.resetPassword(
+                req.get("username"),
+                req.get("email"),
+                req.get("code")
+        );
+
+        if (result) {
+            return ResponseEntity.ok("임시 비밀번호가 이메일로 전송되었습니다.");
+        } else {
+            return ResponseEntity.badRequest().body("인증 실패 또는 회원 정보 없음");
+        }
+    }
+
+    @Operation(summary = "새 비밀번호 중복 확인", description = "새 비밀번호가 현재 비밀번호와 같은지 확인합니다. (같으면 409, 다르면 200)")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            content = @Content(examples = @ExampleObject(value = "{\"newPassword\": \"1234\"}"))
+    )
+
+    @PostMapping("/members/check-new-password")
+    public ResponseEntity<?> checkNewPassword(@RequestHeader("Authorization") String token,
+                                              @RequestBody Map<String, String> req) {
+        Long userId = jwtUtil.getUserId(token);
+        String newPassword = req.get("newPassword");
+
+        // 서비스 로직 호출 (기존 비번과 비교)
+        if (memberService.checkPassword(userId, newPassword)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body("현재 사용 중인 비밀번호입니다.");
+        }
+
+        return ResponseEntity.ok("사용 가능한 비밀번호입니다.");
     }
 
     @Operation(summary = "이메일 인증번호 발송")
@@ -235,11 +280,11 @@ public class MemberRestController {
     }
 
     @Operation(summary = "아이디 찾기", description = "이메일 인증 후 아이디를 반환합니다.")
-    @PostMapping("/auth/find-id")
+    @PostMapping("/auth/find-username")
     public ResponseEntity<?> findId(@RequestBody Map<String, String> req) {
         try {
-            String loginId = memberService.findLoginId(req.get("email"), req.get("code"));
-            return ResponseEntity.ok(Map.of("loginId", loginId));
+            String username = memberService.findUsername(req.get("email"), req.get("code"));
+            return ResponseEntity.ok(Map.of("username", username));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
@@ -250,13 +295,13 @@ public class MemberRestController {
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             content = @io.swagger.v3.oas.annotations.media.Content(
                     examples = @io.swagger.v3.oas.annotations.media.ExampleObject(
-                            value = "{\"loginId\": \"ssafy_king\", \"email\": \"test01@ssafy.com\", \"code\": \"123456\"}"
+                            value = "{\"username\": \"ssafy_king\", \"email\": \"test01@ssafy.com\", \"code\": \"123456\"}"
                     )
             )
     )
     @PostMapping("/auth/verify-reset")
     public ResponseEntity<?> verifyForReset(@RequestBody Map<String, String> req) {
-        boolean isValid = memberService.verifyUserForReset(req.get("loginId"), req.get("email"),
+        boolean isValid = memberService.verifyUserForReset(req.get("username"), req.get("email"),
                 req.get("code"));
         if (isValid) {
             return ResponseEntity.ok(Map.of("success", true));
@@ -264,25 +309,6 @@ public class MemberRestController {
         return ResponseEntity.badRequest().body(Map.of("success", false, "message", "정보 불일치"));
     }
 
-    // 1-9. 비밀번호 찾기 2단계 (변경)
-    @Operation(summary = "비밀번호 찾기 2단계 (변경)", description = "인증된 사용자의 비밀번호를 변경합니다.")
-    @io.swagger.v3.oas.annotations.parameters.RequestBody(
-            content = @io.swagger.v3.oas.annotations.media.Content(
-                    examples = @io.swagger.v3.oas.annotations.media.ExampleObject(
-                            value = "{\"loginId\": \"ssafy_king\", \"email\": \"test01@ssafy.com\", \"code\": \"123456\", \"newPassword\": \"newPass1234\"}"
-                    )
-            )
-    )
-    @PostMapping("/auth/reset-password")
-    public ResponseEntity<?> resetPassword(@RequestBody Map<String, String> req) {
-        boolean result =
-                memberService.resetPassword(req.get("loginId"), req.get("email"), req.get("code"),
-                        req.get("newPassword"));
-        if (result) {
-            return ResponseEntity.ok("비밀번호가 변경되었습니다.");
-        }
-        return ResponseEntity.badRequest().body("변경 실패");
-    }
 
     @Operation(summary = "토큰 재발급 (Refresh)", description = "리프레시 토큰으로 새 액세스 토큰을 발급받습니다.")
     @PostMapping("/auth/refresh")

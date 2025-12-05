@@ -61,4 +61,14 @@ public class EmailServiceImpl implements EmailService {
         emailAuthDao.updateVerified(authDto.getAuthId());
         return true;
     }
+
+
+    @Override
+    public void sendTempPassword(String email, String tempPassword) {
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setTo(email);
+        message.setSubject("[냠냠코치] 임시 비밀번호 발급 안내");
+        message.setText("회원님의 임시 비밀번호는 [" + tempPassword + "] 입니다.\n로그인 후 반드시 비밀번호를 변경해주세요.");
+        javaMailSender.send(message);
+    }
 }

@@ -6,15 +6,15 @@
 
     <insert id="insertMember" parameterType="com.ssafy.bapai.member.dto.MemberDto" useGeneratedKeys="true"
             keyProperty="userId">
-        INSERT INTO member (login_id, email, password, name, nickname, role, provider, provider_id, status, joined_at)
-        VALUES (#{loginId}, #{email}, #{password}, #{name}, #{nickname}, 'ROLE_GUEST', #{provider}, #{providerId},
+        INSERT INTO member (username, email, password, name, nickname, role, provider, provider_id, status, joined_at)
+        VALUES (#{username}, #{email}, #{password}, #{name}, #{nickname}, 'ROLE_GUEST', #{provider}, #{providerId},
                 'ACTIVE', NOW())
     </insert>
 
-    <select id="selectMemberByLoginId" parameterType="string" resultType="com.ssafy.bapai.member.dto.MemberDto">
+    <select id="selectMemberByUsername" parameterType="string" resultType="com.ssafy.bapai.member.dto.MemberDto">
         SELECT *
         FROM member
-        WHERE login_id = #{loginId}
+        WHERE username = #{username}
     </select>
 
     <select id="selectMemberByEmail" parameterType="string" resultType="com.ssafy.bapai.member.dto.MemberDto">
@@ -28,24 +28,24 @@
         FROM member
         WHERE user_id = #{userId}
     </select>
-    
-    <select id="selectMemberByLoginIdAndEmail" resultType="com.ssafy.bapai.member.dto.MemberDto">
+
+    <select id="selectMemberByUsernameAndEmail" resultType="com.ssafy.bapai.member.dto.MemberDto">
         SELECT *
         FROM member
-        WHERE login_id = #{loginId}
+        WHERE username = #{username}
           AND email = #{email}
+    </select>
+
+    <select id="checkUsername" parameterType="string" resultType="int">
+        SELECT COUNT(*)
+        FROM member
+        WHERE username = #{username}
     </select>
 
     <select id="checkEmail" parameterType="string" resultType="int">
         SELECT COUNT(*)
         FROM member
         WHERE email = #{email}
-    </select>
-
-    <select id="checkLoginId" parameterType="string" resultType="int">
-        SELECT COUNT(*)
-        FROM member
-        WHERE login_id = #{loginId}
     </select>
 
     <select id="checkNickname" parameterType="string" resultType="int">
@@ -69,6 +69,7 @@
             <if test="diseaseCodes != null">disease_codes = #{diseaseCodes},</if>
             <if test="allergyCodes != null">allergy_codes = #{allergyCodes},</if>
             <if test="role != null">role = #{role},</if>
+            <if test="status != null">status = #{status},</if>
             updated_at = NOW()
         </set>
         WHERE user_id = #{userId}
@@ -76,21 +77,26 @@
 
     <update id="updatePassword">
         UPDATE member
-        SET password   = #{password},
-            updated_at = NOW()
+        SET password         = #{password},
+            is_temp_password = false,
+            updated_at       = NOW()
         WHERE user_id = #{userId}
     </update>
-
+    <update id="updateTempPassword" parameterType="com.ssafy.bapai.member.dto.MemberDto">
+        UPDATE member
+        SET password         = #{password},
+            is_temp_password = true,
+            updated_at       = NOW()
+        WHERE user_id = #{userId}
+    </update>
     <update id="updateLastLogin">
         UPDATE member
         SET last_login_at = NOW()
         WHERE user_id = #{userId}
     </update>
-
     <update id="deleteMember">
         UPDATE member
         SET status = 'WITHDRAWN'
         WHERE user_id = #{userId}
     </update>
-
 </mapper>

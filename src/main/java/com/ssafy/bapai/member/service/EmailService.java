@@ -6,4 +6,7 @@ public interface EmailService {
 
     // 인증번호 검증 (맞으면 true)
     boolean verifyCode(String email, String code);
+
+    void sendTempPassword(String email, String tempPassword);
+    
 }
