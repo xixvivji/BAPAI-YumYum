@@ -15,6 +15,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.HashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -27,6 +28,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+@Slf4j
 @RestController
 @RequestMapping("/api")
 @RequiredArgsConstructor
@@ -215,7 +217,7 @@ public class MemberRestController {
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             content = @Content(
                     mediaType = "application/json",
-                 
+
                     examples = @ExampleObject(
                             value = "{\"username\": \"ssafy_king\", \"email\": \"test01@ssafy.com\", \"code\": \"123456\"}"
                     )
@@ -247,12 +249,14 @@ public class MemberRestController {
                                               @RequestBody Map<String, String> req) {
         Long userId = jwtUtil.getUserId(token);
         String newPassword = req.get("newPassword");
-
+        log.info("[checkNewPassword] userId={}, newPassword={}", userId, newPassword);
         // 서비스 로직 호출 (기존 비번과 비교)
         if (memberService.checkPassword(userId, newPassword)) {
+            log.info("[checkNewPassword][FAIL] 같은 비밀번호 사용 시도 userId={}", userId);
             return ResponseEntity.status(HttpStatus.CONFLICT).body("현재 사용 중인 비밀번호입니다.");
-        }
 
+        }
+        log.info("[checkNewPassword][SUCCESS] 사용 가능한 비밀번호 userId={}", userId);
         return ResponseEntity.ok("사용 가능한 비밀번호입니다.");
     }
 
@@ -377,12 +381,27 @@ public class MemberRestController {
         return ResponseEntity.ok(Map.of("match", match));
     }
 
-    @Operation(summary = "비밀번호 변경")
+    @Operation(summary = "비밀번호 변경", description = "로그인된 사용자의 비밀번호를 변경합니다.")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            content = @Content(
+                    examples = @ExampleObject(
+                            // [수정] userId 제거하고 비밀번호만 남김
+                            value = "{\"newPassword\": \"change1234\"}"
+                    )
+            )
+    )
     @PatchMapping("/members/password")
     public ResponseEntity<?> updatePassword(@RequestHeader("Authorization") String token,
                                             @RequestBody Map<String, String> req) {
-        Long userId = jwtUtil.getUserId(token);
-        memberService.updatePassword(userId, req.get("newPassword"));
+        Long userId = jwtUtil.getUserId(token); // 토큰에서 꺼냄 (안전)
+        String newPassword = req.get("newPassword");
+
+        // (선택사항) 여기서 유효성 검사 추가 가능 (빈값 체크 등)
+        if (newPassword == null || newPassword.isBlank()) {
+            return ResponseEntity.badRequest().body("새 비밀번호를 입력해주세요.");
+        }
+
+        memberService.updatePassword(userId, newPassword);
         return ResponseEntity.ok("비밀번호 변경 완료");
     }
 
