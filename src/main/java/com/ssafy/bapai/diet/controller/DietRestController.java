@@ -28,7 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/diet-logs")
 @RequiredArgsConstructor
-@Tag(name = "2. 식단(Diet) API", description = "식단 기록, 조회, AI 분석, 추천 등 (엑셀 명세서 기준 7개)")
+@Tag(name = "2. 식단(Diet) API", description = "식단 기록, 조회, AI 분석, 추천 등 ")
 public class DietRestController {
 
     private final DietService dietService;
@@ -80,7 +80,7 @@ public class DietRestController {
             @RequestParam(required = false) String month) {
 
         Long userId = jwtUtil.getUserId(token);
-        // (실제로는 month 파라미터가 오면 월간 조회 로직을 타야 함)
+
         return ResponseEntity.ok(
                 dietService.getDailyDiets(userId, date != null ? date : "2025-12-07"));
     }
