@@ -17,4 +17,13 @@ public interface DietDao {
     List<DietDetailDto> selectDietDetails(Long dietId);
 
     int deleteDiet(Long dietId);
+
+    // 4. 수정 (메인 정보 업데이트)
+    int updateDiet(DietDto dietDto);
+
+    // 5. 상세 메뉴 초기화 (수정 시 기존 메뉴 삭제용)
+    int deleteDietDetails(Long dietId);
+
+    // 6. 단건 상세 조회 (메인 정보)
+    DietDto selectDietById(Long dietId);
 }
