@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.ssafy.bapai.diet.dao.DietDao">
+
+    <insert id="insertDiet" parameterType="com.ssafy.bapai.diet.dto.DietDto" useGeneratedKeys="true"
+            keyProperty="dietId">
+        INSERT INTO diet (user_id, eat_date, meal_type, diet_img, memo, total_kcal, score, ai_analysis, created_at)
+        VALUES (#{userId}, #{eatDate}, #{mealType}, #{dietImg}, #{memo}, #{totalKcal}, 0, NULL, NOW())
+    </insert>
+
+    <insert id="insertDietDetail" parameterType="com.ssafy.bapai.diet.dto.DietDetailDto">
+        INSERT INTO diet_detail (diet_id, food_code, food_name, amount, kcal)
+        VALUES (#{dietId}, #{foodCode}, #{foodName}, #{amount}, #{kcal})
+    </insert>
+
+    <select id="selectDietsByDate" resultType="com.ssafy.bapai.diet.dto.DietDto">
+        SELECT diet_id                           as dietId,
+               user_id                           as userId,
+               DATE_FORMAT(eat_date, '%Y-%m-%d') as eatDate,
+               meal_type                         as mealType,
+               diet_img                          as dietImg,
+               memo,
+               total_kcal                        as totalKcal,
+               score,
+               ai_analysis                       as aiAnalysis
+        FROM diet
+        WHERE user_id = #{userId}
+          AND eat_date = #{date}
+        ORDER BY FIELD(meal_type, 'BREAKFAST', 'LUNCH', 'DINNER', 'SNACK')
+    </select>
+
+    <select id="selectDietDetails" resultType="com.ssafy.bapai.diet.dto.DietDetailDto">
+        SELECT detail_id as detailId,
+               diet_id   as dietId,
+               food_code as foodCode,
+               food_name as foodName,
+               amount,
+               kcal
+        FROM diet_detail
+        WHERE diet_id = #{dietId}
+    </select>
+
+    <delete id="deleteDiet">
+        DELETE
+        FROM diet
+        WHERE diet_id = #{dietId}
+    </delete>
+    <update id="updateDiet" parameterType="com.ssafy.bapai.diet.dto.DietDto">
+        UPDATE diet
+        SET meal_type  = #{mealType},
+            diet_img   = #{dietImg},
+            memo       = #{memo},
+            total_kcal = #{totalKcal}
+        WHERE diet_id = #{dietId}
+    </update>
+
+    <delete id="deleteDietDetails">
+        DELETE
+        FROM diet_detail
+        WHERE diet_id = #{dietId}
+    </delete>
+
+    <select id="selectDietById" resultType="com.ssafy.bapai.diet.dto.DietDto">
+        SELECT diet_id                           as dietId,
+               user_id                           as userId,
+               DATE_FORMAT(eat_date, '%Y-%m-%d') as eatDate,
+               meal_type                         as mealType,
+               diet_img                          as dietImg,
+               memo,
+               total_kcal                        as totalKcal,
+               score,
+               ai_analysis                       as aiAnalysis
+        FROM diet
+        WHERE diet_id = #{dietId}
+    </select>
+</mapper>
