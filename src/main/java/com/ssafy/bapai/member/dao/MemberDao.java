@@ -35,4 +35,6 @@ public interface MemberDao {
     int deleteMember(Long userId);
 
     int updateTempPassword(MemberDto member);
+
+    void deleteRefreshToken(Long userId);
 }

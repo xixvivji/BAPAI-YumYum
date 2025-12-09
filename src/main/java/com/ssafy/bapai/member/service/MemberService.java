@@ -37,5 +37,7 @@ public interface MemberService {
     @Transactional
     boolean resetPassword(String username, String email, String code);
 
+    void logout(Long userId);
+    
     MemberDto socialLogin(String email, String name, String provider, String providerId);
 }
