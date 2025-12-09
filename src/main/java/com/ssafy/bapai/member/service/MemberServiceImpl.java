@@ -46,6 +46,13 @@ public class MemberServiceImpl implements MemberService {
         return member;
     }
 
+    @Override
+    @Transactional
+    public void logout(Long userId) {
+
+        memberDao.deleteRefreshToken(userId);
+    }
+
     // 3. 회원 조회
     @Override
     public MemberDto getMember(Long userId) {

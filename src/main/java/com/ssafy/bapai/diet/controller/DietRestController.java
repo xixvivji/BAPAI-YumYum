@@ -34,7 +34,7 @@ public class DietRestController {
     private final DietService dietService;
     private final JwtUtil jwtUtil;
 
-//    // 1. [NEW] 식단 이미지 AI 분석
+//    // 1. 식단 이미지 AI 분석
 //    @Operation(summary = "식단 이미지 AI 분석", description = "식단 사진을 업로드하면 AI가 음식 종류와 칼로리를 분석해서 반환합니다.")
 //    @ApiResponses(value = {
 //            @ApiResponse(responseCode = "200", description = "분석 성공", content = @Content(mediaType = "application/json", schema = @Schema(example = "{ \"predictedFoods\": [ {\"name\": \"김치찌개\", \"probability\": 98.5, \"foodCode\": \"D0001\"} ] }")))

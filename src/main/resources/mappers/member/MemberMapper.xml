@@ -99,4 +99,9 @@
         SET status = 'WITHDRAWN'
         WHERE user_id = #{userId}
     </update>
+    <update id="deleteRefreshToken">
+        UPDATE member
+        SET refresh_token = NULL
+        WHERE user_id = #{userId}
+    </update>
 </mapper>

@@ -175,12 +175,24 @@ public class MemberRestController {
         }
     }
 
-    @Operation(summary = "로그아웃", description = "DB에서 리프레시 토큰을 삭제합니다.")
-    @PostMapping("/auth/logout")
-    public ResponseEntity<?> logout(@RequestHeader("Authorization") String token) {
-        Long userId = jwtUtil.getUserId(token);
-        refreshTokenDao.delete(String.valueOf(userId));
-        return ResponseEntity.ok(Map.of("success", true, "message", "로그아웃 되었습니다."));
+    @PostMapping("/logout")
+    public ResponseEntity<?> logout(
+            @RequestHeader(value = "Authorization", required = false) String token) {
+
+        if (token == null || !token.startsWith("Bearer ")) {
+            return ResponseEntity.ok("로그아웃 되었습니다.");
+        }
+
+        // 2. 토큰이 있다면 리프레시 토큰 삭제 로직 수행
+        String realToken = token.substring(7);
+
+       
+        Long userId = jwtUtil.getUserId(realToken);
+
+        // 3. 서비스 호출 (이제 Long 타입이 들어가니 에러 해결!)
+        memberService.logout(userId);
+
+        return ResponseEntity.ok("로그아웃 성공");
     }
 
     @Operation(summary = "이메일 중복 체크")
