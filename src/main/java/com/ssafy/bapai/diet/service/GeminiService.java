@@ -1,5 +1,7 @@
 package com.ssafy.bapai.diet.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
@@ -23,31 +25,32 @@ public class GeminiService {
     @Value("${gemini.url}")
     private String apiUrl;
 
+    private final ObjectMapper objectMapper; // JSON 파싱용 (Spring이 자동 주입)
+
+    // 메인 메서드: 이미지 받아서 분석 결과(JSON String) 리턴
     public String analyzeImage(MultipartFile file) {
         try {
-            // 1. 이미지를 Base64 문자열로 변환
+            // 1. 이미지 -> Base64 변환
             byte[] fileBytes = file.getBytes();
             String base64Image = Base64.getEncoder().encodeToString(fileBytes);
 
-            // 2. 요청 Payload 구성 (Gemini 전용 포맷)
+            // 2. 요청 Body 만들기 (Gemini 전용 규격)
             Map<String, Object> requestBody = new HashMap<>();
-
-            // "contents": [{ "parts": [ {text...}, {inline_data...} ] }]
             List<Map<String, Object>> contents = new ArrayList<>();
             Map<String, Object> content = new HashMap<>();
             List<Map<String, Object>> parts = new ArrayList<>();
 
-            // (1) 텍스트 프롬프트 (JSON 형식을 강제함)
+            // (1) 프롬프트 (명령어)
             Map<String, Object> textPart = new HashMap<>();
             textPart.put("text", """
-                    이 음식 사진을 분석해서 다음 JSON 형식으로만 답해줘. 마크다운이나 다른 말은 절대 하지 마.
+                    이 음식 사진을 분석해서 다음 JSON 형식으로만 답해줘. 설명이나 마크다운(```json)은 절대 쓰지 마.
                     형식:
                     {
                         "predictedFoods": [
                             {
                                 "name": "음식명(한글)",
-                                "probability": 확신하는정도(0~100 숫자),
-                                "kcal": 1인분칼로리(숫자),
+                                "probability": 85.5,
+                                "kcal": 300,
                                 "amount": 1
                             }
                         ]
@@ -67,49 +70,94 @@ public class GeminiService {
             contents.add(content);
             requestBody.put("contents", contents);
 
-            // 3. WebClient로 Gemini API 호출
+            // 3. Google Gemini API 호출
             WebClient webClient = WebClient.create();
             String response = webClient.post()
-                    .uri(apiUrl + "?key=" + apiKey) // URL 뒤에 키를 붙여야 함
+                    .uri(apiUrl + "?key=" + apiKey) // URL 뒤에 키 붙임
                     .header("Content-Type", "application/json")
                     .bodyValue(requestBody)
                     .retrieve()
                     .bodyToMono(String.class)
-                    .block(); // 동기 처리
+                    .block(); // 결과가 올 때까지 기다림 (동기)
 
-            // 4. 응답에서 텍스트만 추출 (간단 파싱)
-            // 실제 응답: { "candidates": [ { "content": { "parts": [ { "text": "{결과JSON}" } ] } } ] }
-            return extractTextFromResponse(response);
+            // 4. 응답에서 알맹이(JSON)만 추출
+            return extractJsonFromResponse(response);
 
         } catch (Exception e) {
-            log.error("Gemini 분석 실패", e);
-            // 에러 나면 그냥 빈 JSON이라도 줘서 프론트가 안 뻗게 함
+            log.error("Gemini 분석 중 오류 발생", e);
+            // 에러 나면 빈 리스트 리턴 (프론트 에러 방지)
             return "{\"predictedFoods\": []}";
         }
     }
 
-    // Gemini 응답 구조가 복잡해서 텍스트(JSON)만 쏙 빼내는 메서드
-    private String extractTextFromResponse(String response) {
+    // Gemini의 복잡한 응답 구조에서 텍스트만 쏙 뽑아내는 헬퍼 메서드
+    private String extractJsonFromResponse(String response) {
         try {
-            // Jackson 같은 라이브러리로 파싱하는 게 정석이지만, 급하니까 String 조작으로 처리
-            // "text": " 부분 뒤에 있는 JSON을 찾음
-            int textIndex = response.indexOf("\"text\": \"");
-            if (textIndex == -1) {
-                return "{}";
+            // Jackson 라이브러리로 구조 파싱
+            JsonNode root = objectMapper.readTree(response);
+
+            // 경로: candidates[0] -> content -> parts[0] -> text
+            String text = root.path("candidates").get(0)
+                    .path("content")
+                    .path("parts").get(0)
+                    .path("text").asText();
+
+            // AI가 가끔 ```json ... ``` 이런 식으로 마크다운을 붙여서 줄 때가 있음. 제거 로직
+            if (text.startsWith("```")) {
+                text = text.replaceAll("```json", "").replaceAll("```", "");
             }
+            return text.trim();
 
-            String sub = response.substring(textIndex + 9);
-            // 뒤에 있는 \n이나 특수문자들 정리가 필요할 수 있음.
-            // 가장 좋은 건 여기서 ObjectMapper를 쓰는 것입니다.
-            // 일단은 통째로 리턴하고 프론트가 알아서 파싱하게 하거나,
-            // 더 안전하게 하려면 Jackson 라이브러리 사용을 추천합니다.
-
-            // 편의상 원본 JSON 응답을 그대로 줘서 프론트에서 candidates[0].content... 파싱해도 됨.
-            // 하지만 우리는 바로 쓸 수 있는 깔끔한 JSON을 원하므로
-            // 실제로는 여기서 JSON 라이브러리로 파싱하는 코드를 넣는 게 좋습니다.
-            return response;
         } catch (Exception e) {
-            return "{}";
+            log.error("응답 파싱 실패: " + response, e);
+            return "{\"predictedFoods\": []}";
+        }
+    }
+
+    // 텍스트 기반 식단 추천 메서드 (추가)
+    public String recommendMenu(String dailyDietLog) {
+        try {
+            // 1. 프롬프트 작성
+            String prompt = """
+                    사용자가 오늘 먹은 음식 목록이야:
+                    %s
+                    
+                    이걸 분석해서 부족한 영양소를 파악하고, 다음 끼니로 적절한 메뉴 3가지를 추천해줘.
+                    응답은 오직 아래 JSON 형식으로만 줘. (설명 금지)
+                    {
+                        "recommendedMenus": ["메뉴1", "메뉴2", "메뉴3"],
+                        "reason": "나트륨 섭취가 많아 칼륨이 풍부한 음식이 필요합니다."
+                    }
+                    """.formatted(dailyDietLog);
+
+            // 2. 요청 Body 생성 (텍스트 전용)
+            Map<String, Object> requestBody = new HashMap<>();
+            List<Map<String, Object>> contents = new ArrayList<>();
+            Map<String, Object> content = new HashMap<>();
+            List<Map<String, Object>> parts = new ArrayList<>();
+
+            parts.add(Map.of("text", prompt)); // 텍스트만 보냄
+            content.put("parts", parts);
+            contents.add(content);
+            requestBody.put("contents", contents);
+
+            // 3. API 호출
+            WebClient webClient = WebClient.create();
+            String response = webClient.post()
+                    .uri(apiUrl + "?key=" + apiKey)
+                    .header("Content-Type", "application/json")
+                    .bodyValue(requestBody)
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .block();
+
+            // 4. JSON 추출 (기존 메서드 재활용)
+            return extractJsonFromResponse(response);
+
+        } catch (Exception e) {
+            log.error("식단 추천 실패", e);
+            // 에러 시 기본값 리턴
+            return "{\"recommendedMenus\": [\"샐러드\", \"비빔밥\"], \"reason\": \"AI 분석 중 오류가 발생하여 기본 메뉴를 추천합니다.\"}";
         }
     }
 }
