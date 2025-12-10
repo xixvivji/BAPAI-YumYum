@@ -175,24 +175,30 @@ public class MemberRestController {
         }
     }
 
-    @PostMapping("/logout")
+    @Operation(summary = "로그아웃", description = "서버 및 DB의 리프레시 토큰을 만료시킵니다.")
+    @PostMapping("/auth/logout") // ★ 중요: /api + /auth/logout = /api/auth/logout
     public ResponseEntity<?> logout(
             @RequestHeader(value = "Authorization", required = false) String token) {
 
+        // 1. 토큰이 없는 경우 (이미 로그아웃 상태거나 잘못된 요청) -> 에러 안 내고 성공 처리
         if (token == null || !token.startsWith("Bearer ")) {
-            return ResponseEntity.ok("로그아웃 되었습니다.");
+            return ResponseEntity.ok(Map.of("message", "이미 로그아웃 상태입니다."));
         }
 
-        // 2. 토큰이 있다면 리프레시 토큰 삭제 로직 수행
-        String realToken = token.substring(7);
+        try {
 
-       
-        Long userId = jwtUtil.getUserId(realToken);
+            String realToken = token.substring(7);
 
-        // 3. 서비스 호출 (이제 Long 타입이 들어가니 에러 해결!)
-        memberService.logout(userId);
+            Long userId = jwtUtil.getUserId(realToken);
+            
+            memberService.logout(userId);
 
-        return ResponseEntity.ok("로그아웃 성공");
+            return ResponseEntity.ok(Map.of("message", "로그아웃 성공"));
+
+        } catch (Exception e) {
+            // 토큰이 만료되었거나 잘못된 경우에도 그냥 로그아웃 처리
+            return ResponseEntity.ok(Map.of("message", "로그아웃 처리됨 (토큰 만료)"));
+        }
     }
 
     @Operation(summary = "이메일 중복 체크")

@@ -68,21 +68,40 @@ public class DietRestController {
     }
 
     // 3. 식단 목록 조회 (월/일)
-    @Operation(summary = "식단 목록 조회", description = "날짜(YYYY-MM-DD)를 입력하지 않으면 '오늘' 날짜로 조회합니다.")
+    @Operation(summary = "식단 목록 조회 (전체/월간/주간/일간)", description = "조건에 따라 식단 기록을 조회합니다.")
     @GetMapping
     public ResponseEntity<List<DietDto>> getDietLogs(
             @RequestHeader("Authorization") String token,
-            @Parameter(description = "조회할 날짜 (YYYY-MM-DD)", example = "2025-12-10")
+            @Parameter(description = "일간 조회용 (YYYY-MM-DD)")
             @RequestParam(required = false) String date,
-            @Parameter(description = "조회할 월 (YYYY-MM) - 아직 미구현 시 생략 가능")
+
+            @Parameter(description = "주간/기간 조회 시작일 (YYYY-MM-DD)")
+            @RequestParam(required = false) String startDate,
+            @Parameter(description = "주간/기간 조회 종료일 (YYYY-MM-DD)")
+            @RequestParam(required = false) String endDate,
+
+            @Parameter(description = "월간 조회용 (YYYY-MM)")
             @RequestParam(required = false) String month) {
 
         Long userId = jwtUtil.getUserId(token);
 
-        // ★ [수정] 날짜가 없으면 '오늘 날짜' 사용 (하드코딩 제거)
-        String targetDate = (date != null) ? date : LocalDate.now().toString();
+        // 1. 일간 조회 (date가 있을 때)
+        if (date != null) {
+            return ResponseEntity.ok(dietService.getDailyDiets(userId, date));
+        }
 
-        return ResponseEntity.ok(dietService.getDailyDiets(userId, targetDate));
+        // 2. ★ [추가됨] 주간(기간) 조회 (시작일과 종료일이 둘 다 있을 때)
+        if (startDate != null && endDate != null) {
+            return ResponseEntity.ok(dietService.getWeeklyDiets(userId, startDate, endDate));
+        }
+
+        // 3. 월간 조회 (month가 있을 때)
+        if (month != null) {
+            return ResponseEntity.ok(dietService.getMonthlyDiets(userId, month));
+        }
+
+        // 4. 아무것도 없으면 전체 조회
+        return ResponseEntity.ok(dietService.getAllDiets(userId));
     }
 
     // 4. 식단 상세 조회
@@ -149,7 +168,7 @@ public class DietRestController {
 
             dietSummary.append(" (");
 
-            // 2. 칼로리 (getKcal() -> getTotalKcal()로 변경)
+            // 2. 칼로리
             // null 체크 (Double 타입이므로 null일 수 있음)
             if (log.getTotalKcal() != null) {
                 dietSummary.append(log.getTotalKcal());
@@ -160,7 +179,7 @@ public class DietRestController {
             dietSummary.append(" kcal)\n");
         }
 
-        // 4. Gemini에게 물어보기
+        //  Gemini호출
         String recommendationJson = geminiService.recommendMenu(dietSummary.toString());
 
         return ResponseEntity.ok(recommendationJson);
