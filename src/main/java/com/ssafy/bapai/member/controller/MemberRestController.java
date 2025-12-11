@@ -94,6 +94,7 @@ public class MemberRestController {
             refreshTokenDao.save(rtDto);
 
             Map<String, Object> result = new HashMap<>();
+            result.put("userId", loginUser.getUserId());
             result.put("accessToken", accessToken);
             result.put("refreshToken", refreshToken);
             result.put("role", loginUser.getRole());
@@ -190,7 +191,7 @@ public class MemberRestController {
             String realToken = token.substring(7);
 
             Long userId = jwtUtil.getUserId(realToken);
-            
+
             memberService.logout(userId);
 
             return ResponseEntity.ok(Map.of("message", "로그아웃 성공"));

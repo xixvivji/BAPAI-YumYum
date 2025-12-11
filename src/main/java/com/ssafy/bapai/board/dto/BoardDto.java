@@ -15,4 +15,7 @@ public class BoardDto {
     private int viewCount;      // 조회수
 
     private String createdAt;   // 작성일
+
+    private int likeCount;    // 추천
+    private int dislikeCount; // 비추천
 }

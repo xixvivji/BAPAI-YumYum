@@ -1,10 +1,12 @@
 package com.ssafy.bapai.board.service;
 
 import com.ssafy.bapai.board.dto.BoardDto;
-import java.util.List;
+import com.ssafy.bapai.common.dto.PageResponse;
 
 public interface BoardService {
-    List<BoardDto> getBoardList(String category);
+
+    // 페이징 적용된 목록 조회
+    PageResponse<BoardDto> getBoardList(int page, int size, String category);
 
     BoardDto getBoardDetail(Long boardId);
 
@@ -13,4 +15,7 @@ public interface BoardService {
     void modifyBoard(BoardDto boardDto);
 
     void removeBoard(Long boardId);
+
+    // 게시글 추천/비추천
+    void addBoardReaction(Long boardId, Long userId, String type);
 }
