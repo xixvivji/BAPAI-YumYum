@@ -4,9 +4,19 @@
 
 <mapper namespace="com.ssafy.bapai.board.dao.BoardDao">
 
-    <select id="selectAllBoards" resultType="com.ssafy.bapai.board.dto.BoardDto">
-        SELECT b.board_id, b.category, b.title, b.view_count as viewCount,
-        b.created_at as createdAt, m.name as nickname
+    <select id="selectBoardList" resultType="com.ssafy.bapai.board.dto.BoardDto">
+        SELECT
+        b.board_id,
+        b.category,
+        b.title,
+        b.content, -- 목록에서도 내용 미리보기용
+        b.user_id, -- 작성자 ID (본인글 확인용)
+        b.view_count as viewCount,
+        b.like_count as likeCount,
+        b.dislike_count as dislikeCount,
+        b.created_at as createdAt,
+        b.img_url as imgUrl,
+        m.name as nickname
         FROM board b
         JOIN member m ON b.user_id = m.user_id
         <where>
@@ -15,6 +25,14 @@
             </if>
         </where>
         ORDER BY b.created_at DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countBoardList" resultType="long">
+        SELECT COUNT(*) FROM board
+        <where>
+            <if test="category != null and category != ''">category = #{category}</if>
+        </where>
     </select>
 
     <select id="selectBoardById" resultType="com.ssafy.bapai.board.dto.BoardDto">
@@ -23,10 +41,12 @@
                b.category,
                b.title,
                b.content,
-               b.img_url    as imgUrl,
-               b.view_count as viewCount,
-               b.created_at as createdAt,
-               m.name       as nickname
+               b.img_url       as imgUrl,
+               b.view_count    as viewCount,
+               b.like_count    as likeCount,    -- 추천수 추가
+               b.dislike_count as dislikeCount, -- 비추천수 추가
+               b.created_at    as createdAt,
+               m.name          as nickname
         FROM board b
                  JOIN member m ON b.user_id = m.user_id
         WHERE b.board_id = #{boardId}
@@ -55,6 +75,19 @@
     <update id="updateHit">
         UPDATE board
         SET view_count = view_count + 1
+        WHERE board_id = #{boardId}
+    </update>
+
+    <insert id="insertBoardReaction">
+        INSERT INTO board_reaction (board_id, user_id, reaction_type)
+        VALUES (#{boardId}, #{userId}, #{type})
+    </insert>
+
+    <update id="increaseBoardReactionCount">
+        UPDATE board
+        SET
+        <if test="type == 'LIKE'">like_count = like_count + 1</if>
+        <if test="type == 'DISLIKE'">dislike_count = dislike_count + 1</if>
         WHERE board_id = #{boardId}
     </update>
 

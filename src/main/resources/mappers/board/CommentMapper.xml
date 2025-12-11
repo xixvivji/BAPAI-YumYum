@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.ssafy.bapai.board.dao.CommentDao">
+
+    <select id="selectCommentsByBoardId" resultType="com.ssafy.bapai.board.dto.CommentDto">
+        SELECT c.comment_id,
+               c.board_id,
+               c.user_id,
+               c.parent_id,
+               c.content,
+               c.like_count    as likeCount,
+               c.dislike_count as dislikeCount,
+               c.created_at    as createdAt,
+               m.name          as nickname
+        FROM comment c
+                 JOIN member m ON c.user_id = m.user_id
+        WHERE c.board_id = #{boardId}
+        -- 부모 댓글 먼저, 그 다음 작성순 (Nulls First는 DB에 따라 문법 다를 수 있음. 보통 ASC로 충분)
+        ORDER BY c.parent_id ASC, c.created_at ASC
+    </select>
+
+    <insert id="insertComment">
+        INSERT INTO comment (board_id, user_id, parent_id, content)
+        VALUES (#{boardId}, #{userId}, #{parentId}, #{content})
+    </insert>
+
+    <delete id="deleteComment">
+        DELETE
+        FROM comment
+        WHERE comment_id = #{commentId}
+    </delete>
+
+    <insert id="insertCommentReaction">
+        INSERT INTO comment_reaction (comment_id, user_id, reaction_type)
+        VALUES (#{commentId}, #{userId}, #{type})
+    </insert>
+
+    <update id="increaseCommentReactionCount">
+        UPDATE comment
+        SET
+        <if test="type == 'LIKE'">like_count = like_count + 1</if>
+        <if test="type == 'DISLIKE'">dislike_count = dislike_count + 1</if>
+        WHERE comment_id = #{commentId}
+    </update>
+
+</mapper>
