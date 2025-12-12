@@ -1,5 +1,7 @@
 package com.ssafy.bapai.board.dto;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+import java.time.LocalDateTime;
 import lombok.Data;
 
 @Data
@@ -14,8 +16,13 @@ public class BoardDto {
     private String imgUrl;      // 이미지 주소
     private int viewCount;      // 조회수
 
-    private String createdAt;   // 작성일
+    // 작성일 (패턴: 년-월-일 시:분:초)
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime createdAt;
 
+    // 수정일 (추가됨)
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime updatedAt;
     private int likeCount;    // 추천
     private int dislikeCount; // 비추천
 }

@@ -18,9 +18,9 @@ public class CommentServiceImpl implements CommentService {
 
     // 1. 댓글 목록 조회 (대댓글 계층 구조 조립)
     @Override
-    public List<CommentDto> getComments(Long boardId) {
+    public List<CommentDto> getComments(Long boardId, Long userId) {
         // (1) DB에서 해당 게시글의 모든 댓글을 가져옴 (평면 리스트)
-        List<CommentDto> allComments = commentDao.selectCommentsByBoardId(boardId);
+        List<CommentDto> allComments = commentDao.selectCommentsByBoardId(boardId, userId);
 
         // (2) 결과로 반환할 최상위(부모) 댓글 리스트
         List<CommentDto> rootComments = new ArrayList<>();
@@ -55,27 +55,70 @@ public class CommentServiceImpl implements CommentService {
         commentDao.insertComment(dto);
     }
 
-    // 3. 댓글 삭제
     @Override
-    public void deleteComment(Long commentId) {
-        // 실제 서비스에서는 여기서 '작성자가 맞는지' 확인하는 로직이 필요함 (Security 등 활용)
+    public void deleteComment(Long commentId, Long userId) { // 파라미터 2개로 변경
+
+        // (1) 본인 확인 (내 댓글이 아니면 예외 발생)
+        checkOwner(commentId, userId);
+
+        // (2) 삭제 진행
         commentDao.deleteComment(commentId);
     }
 
-    // 4. 댓글 추천/비추천 (트랜잭션 필수)
+    // 3. 댓글 수정 (본인 확인 추가)
     @Override
-    @Transactional // 두 개의 DB 작업이 모두 성공해야 함
+    public void modifyComment(CommentDto dto) {
+        checkOwner(dto.getCommentId(), dto.getUserId()); // 본인 확인
+        commentDao.updateComment(dto);
+    }
+
+    // 4. 댓글 삭제 (본인 확인 추가)
+    @Override
+    public void removeComment(Long commentId, Long userId) {
+        checkOwner(commentId, userId); // 본인 확인
+        commentDao.deleteComment(commentId);
+    }
+
+    // 5. 댓글 추천/비추천 등록
+    @Override
+    @Transactional
     public void addReaction(Long commentId, Long userId, String type) {
         try {
-            // (1) 중복 투표 방지 테이블에 기록 (이미 했으면 여기서 에러 발생)
             commentDao.insertCommentReaction(commentId, userId, type);
-
-            // (2) 댓글 테이블의 like_count 또는 dislike_count 증가
             commentDao.increaseCommentReactionCount(commentId, type);
-
         } catch (Exception e) {
-            // DB 제약조건(Unique Key) 위반 시 예외 처리
-            throw new IllegalStateException("이미 참여한 투표입니다.");
+            throw new IllegalStateException("이미 반응을 남겼습니다.");
+        }
+    }
+
+    // 6. 댓글 추천/비추천 취소 (Logic: 조회 -> 삭제 -> 감소)
+    @Override
+    @Transactional
+    public void deleteReaction(Long commentId, Long userId) {
+        // (1) 내가 무슨 반응을 했는지 확인
+        String type = commentDao.selectReactionType(commentId, userId);
+        if (type == null) {
+            throw new IllegalStateException("취소할 반응이 없습니다.");
+        }
+
+        // (2) 반응 테이블에서 삭제
+        int result = commentDao.deleteCommentReaction(commentId, userId);
+        if (result == 0) {
+            throw new IllegalStateException("이미 삭제되었거나 존재하지 않습니다.");
+        }
+
+        // (3) 집계 테이블에서 카운트 감소
+        commentDao.decreaseCommentReactionCount(commentId, type);
+    }
+
+    // [Helper] 본인 확인 메서드
+    private void checkOwner(Long commentId, Long userId) {
+        CommentDto comment = commentDao.selectCommentById(commentId);
+        if (comment == null) {
+            throw new IllegalArgumentException("존재하지 않는 댓글입니다.");
+        }
+        if (!comment.getUserId().equals(userId)) {
+            throw new SecurityException("권한이 없습니다."); // 또는 AccessDeniedException
         }
     }
 }

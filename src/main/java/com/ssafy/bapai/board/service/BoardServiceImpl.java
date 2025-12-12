@@ -3,7 +3,10 @@ package com.ssafy.bapai.board.service;
 import com.ssafy.bapai.board.dao.BoardDao;
 import com.ssafy.bapai.board.dto.BoardDto;
 import com.ssafy.bapai.common.dto.PageResponse;
+import java.io.File;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,29 +16,31 @@ import org.springframework.transaction.annotation.Transactional;
 public class BoardServiceImpl implements BoardService {
 
     private final BoardDao boardDao;
+    private final String UPLOAD_DIR = System.getProperty("user.dir") + "/uploads/";
 
     @Override
-    public PageResponse<BoardDto> getBoardList(int page, int size, String category) {
-        // 1. 페이징 계산
+    public PageResponse<BoardDto> getBoardList(int page, int size, String category, String key,
+                                               String word) {
         int offset = (page - 1) * size;
 
-        // 2. 리스트 조회
-        List<BoardDto> list = boardDao.selectBoardList(category, size, offset);
+        // 검색 조건 Map에 담기
+        Map<String, Object> params = new HashMap<>();
+        params.put("size", size);
+        params.put("offset", offset);
+        params.put("category", category);
+        params.put("key", key);
+        params.put("word", word);
 
-        // 3. 전체 개수 조회
-        long totalElements = boardDao.countBoardList(category);
+        List<BoardDto> list = boardDao.selectBoardList(params);
+        long totalElements = boardDao.selectBoardCount(params);
 
-        // 4. 전체 페이지 수 계산
-        int totalPages = (int) Math.ceil((double) totalElements / size);
-
-        // 5. 결과 반환
-        return new PageResponse<>(list, page, size, totalPages, totalElements);
+        return new PageResponse<>(list, page, size, totalElements);
     }
 
     @Override
     public BoardDto getBoardDetail(Long boardId) {
         boardDao.updateHit(boardId);
-        return boardDao.selectBoardById(boardId);
+        return boardDao.selectBoardDetail(boardId);
     }
 
     @Override
@@ -45,11 +50,40 @@ public class BoardServiceImpl implements BoardService {
 
     @Override
     public void modifyBoard(BoardDto boardDto) {
+   
         boardDao.updateBoard(boardDto);
     }
 
     @Override
-    public void removeBoard(Long boardId) {
+    @Transactional
+    public void removeBoard(Long boardId, Long userId) {
+        // 1. 본인 확인 및 게시글 정보 조회 (파일 경로 때문)
+        BoardDto board = boardDao.selectBoardDetail(boardId);
+        if (board == null) {
+            throw new IllegalArgumentException("게시글이 없습니다.");
+        }
+        if (!board.getUserId().equals(userId)) {
+            throw new SecurityException("권한이 없습니다.");
+        }
+
+        // 2. 댓글 삭제 (해당 게시글의 모든 댓글)
+
+        boardDao.deleteCommentsByBoardId(boardId);
+
+        // 3. 게시글 좋아요/싫어요 기록 삭제
+        boardDao.deleteAllReactionsByBoardId(boardId);
+
+        // 4. 첨부 파일 삭제 (로컬 디스크)
+        if (board.getImgUrl() != null && !board.getImgUrl().isEmpty()) {
+            // /images/uuid_filename.jpg -> uuid_filename.jpg 추출
+            String fileName = board.getImgUrl().replace("/images/", "");
+            File file = new File(UPLOAD_DIR + fileName);
+            if (file.exists()) {
+                file.delete(); // 실제 파일 삭제
+            }
+        }
+
+        // 5. 대망의 게시글 삭제
         boardDao.deleteBoard(boardId);
     }
 
@@ -67,5 +101,21 @@ public class BoardServiceImpl implements BoardService {
             // 이미 투표한 경우 (Unique Key 위반)
             throw new IllegalStateException("이미 참여한 투표입니다.");
         }
+    }
+
+    @Override
+    @Transactional
+    public void deleteReaction(Long boardId, Long userId) {
+        // 1. 내 반응 조회
+        String type = boardDao.selectReactionType(boardId, userId);
+        if (type == null) {
+            throw new IllegalStateException("취소할 반응이 없습니다.");
+        }
+
+        // 2. 삭제
+        boardDao.deleteBoardReaction(boardId, userId);
+
+        // 3. 카운트 감소
+        boardDao.decreaseBoardReactionCount(boardId, type);
     }
 }

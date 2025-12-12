@@ -2,36 +2,60 @@ package com.ssafy.bapai.board.dao;
 
 import com.ssafy.bapai.board.dto.BoardDto;
 import java.util.List;
+import java.util.Map;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 @Mapper
 public interface BoardDao {
-    // category가 null이면 전체 조회, 있으면 해당 카테고리만 조회
-    List<BoardDto> selectBoardList(@Param("category") String category,
-                                   @Param("limit") int limit,
-                                   @Param("offset") int offset);
 
-    // 2. 전체 개수 조회 (페이징 계산용)
-    long countBoardList(String category);
+    // 1. 목록 조회 (검색 + 페이징 + 카테고리)
+    // Map 안에 category, key, word, limit, offset 등이 다 들어옵니다.
+    List<BoardDto> selectBoardList(Map<String, Object> params);
 
-    BoardDto selectBoardById(Long boardId);
+    // 2. 전체 개수 조회 (검색 조건에 맞는 개수여야 페이징이 정확함)
+    // 기존: long countBoardList(String category); -> 변경: Map 사용
+    long selectBoardCount(Map<String, Object> params);
 
+    // 3. 상세 조회
+    BoardDto selectBoardById(Long boardId); // 조회수 증가 없는 단순 조회 (수정/삭제 시 사용)
+
+    BoardDto selectBoardDetail(Long boardId); // (선택) 조회수 증가나 상세 정보가 더 필요하다면 구분해서 사용
+
+    // 4. CRUD
     void insertBoard(BoardDto boardDto);
 
-    void updateBoard(BoardDto boardDto);
+    void updateBoard(BoardDto boardDto); // updated_at = NOW() 포함
 
     void deleteBoard(Long boardId);
 
     void updateHit(Long boardId);
 
-    // [추천/비추천]
-    // 1. 기록 남기기 (중복 방지)
+    // ==========================================
+    // [연쇄 삭제용 Helper] 게시글 삭제 시 같이 지워야 할 것들
+    // ==========================================
+    void deleteCommentsByBoardId(Long boardId);      // 해당 게시글의 댓글 전체 삭제
+
+    void deleteAllReactionsByBoardId(Long boardId);  // 해당 게시글의 좋아요 기록 전체 삭제
+
+    // ==========================================
+    // [추천/비추천] 등록 및 취소
+    // ==========================================
+
+    // 1. 내 반응 조회 (취소 전 확인용)
+    String selectReactionType(@Param("boardId") Long boardId, @Param("userId") Long userId);
+
+    // 2. 기록 남기기 (등록)
     void insertBoardReaction(@Param("boardId") Long boardId,
                              @Param("userId") Long userId,
                              @Param("type") String type);
 
-    // 2. 카운트 증가
-    void increaseBoardReactionCount(@Param("boardId") Long boardId,
-                                    @Param("type") String type);
+    // 3. 기록 삭제하기 (취소)
+    void deleteBoardReaction(@Param("boardId") Long boardId, @Param("userId") Long userId);
+
+    // 4. 카운트 증가 (등록 시)
+    void increaseBoardReactionCount(@Param("boardId") Long boardId, @Param("type") String type);
+
+    // 5. 카운트 감소 (취소 시)
+    void decreaseBoardReactionCount(@Param("boardId") Long boardId, @Param("type") String type);
 }

@@ -4,38 +4,58 @@
 
 <mapper namespace="com.ssafy.bapai.board.dao.BoardDao">
 
+    <sql id="search">
+        <if test="word != null and word != ''">
+            <choose>
+                <when test="key == 'title'">
+                    AND b.title LIKE CONCAT('%', #{word}, '%')
+                </when>
+                <when test="key == 'content'">
+                    AND b.content LIKE CONCAT('%', #{word}, '%')
+                </when>
+                <when test="key == 'nickname'">
+                    AND m.name LIKE CONCAT('%', #{word}, '%')
+                </when>
+            </choose>
+        </if>
+    </sql>
+
     <select id="selectBoardList" resultType="com.ssafy.bapai.board.dto.BoardDto">
         SELECT
         b.board_id,
         b.category,
         b.title,
-        b.content, -- 목록에서도 내용 미리보기용
-        b.user_id, -- 작성자 ID (본인글 확인용)
+        b.content,
+        b.user_id,
         b.view_count as viewCount,
         b.like_count as likeCount,
         b.dislike_count as dislikeCount,
         b.created_at as createdAt,
-        b.img_url as imgUrl,
+        b.updated_at as updatedAt, b.img_url as imgUrl,
         m.name as nickname
         FROM board b
         JOIN member m ON b.user_id = m.user_id
-        <where>
-            <if test="category != null and category != ''">
-                AND b.category = #{category}
-            </if>
-        </where>
+        WHERE 1=1
+        <if test="category != null and category != ''">
+            AND b.category = #{category}
+        </if>
+        <include refid="search"/>
         ORDER BY b.created_at DESC
-        LIMIT #{limit} OFFSET #{offset}
+        LIMIT #{size} OFFSET #{offset}
     </select>
 
-    <select id="countBoardList" resultType="long">
-        SELECT COUNT(*) FROM board
-        <where>
-            <if test="category != null and category != ''">category = #{category}</if>
-        </where>
+    <select id="selectBoardCount" resultType="long">
+        SELECT COUNT(*)
+        FROM board b
+        JOIN member m ON b.user_id = m.user_id
+        WHERE 1=1
+        <if test="category != null and category != ''">
+            AND b.category = #{category}
+        </if>
+        <include refid="search"/>
     </select>
 
-    <select id="selectBoardById" resultType="com.ssafy.bapai.board.dto.BoardDto">
+    <select id="selectBoardDetail" resultType="com.ssafy.bapai.board.dto.BoardDto">
         SELECT b.board_id,
                b.user_id,
                b.category,
@@ -43,27 +63,34 @@
                b.content,
                b.img_url       as imgUrl,
                b.view_count    as viewCount,
-               b.like_count    as likeCount,    -- 추천수 추가
-               b.dislike_count as dislikeCount, -- 비추천수 추가
+               b.like_count    as likeCount,
+               b.dislike_count as dislikeCount,
                b.created_at    as createdAt,
+               b.updated_at    as updatedAt,
                m.name          as nickname
         FROM board b
                  JOIN member m ON b.user_id = m.user_id
         WHERE b.board_id = #{boardId}
     </select>
 
+    <select id="selectBoardById" resultType="com.ssafy.bapai.board.dto.BoardDto">
+        SELECT board_id, user_id, title, img_url as imgUrl
+        FROM board
+        WHERE board_id = #{boardId}
+    </select>
+
     <insert id="insertBoard" parameterType="com.ssafy.bapai.board.dto.BoardDto">
-        INSERT INTO board (user_id, category, title, content, img_url)
-        VALUES (#{userId}, #{category}, #{title}, #{content}, #{imgUrl})
+        INSERT INTO board (user_id, category, title, content, img_url, created_at)
+        VALUES (#{userId}, #{category}, #{title}, #{content}, #{imgUrl}, NOW())
     </insert>
 
     <update id="updateBoard">
         UPDATE board
-        SET title    = #{title},
-            content  = #{content},
-            category = #{category},
-            img_url  = #{imgUrl}
-        WHERE board_id = #{boardId}
+        SET title = #{title},
+        content = #{content},
+        <if test="category != null">category = #{category},</if>
+        <if test="imgUrl != null">img_url = #{imgUrl},</if>
+        updated_at = NOW() WHERE board_id = #{boardId}
     </update>
 
     <delete id="deleteBoard">
@@ -78,16 +105,50 @@
         WHERE board_id = #{boardId}
     </update>
 
+    <delete id="deleteCommentsByBoardId">
+        DELETE
+        FROM comment
+        WHERE board_id = #{boardId}
+    </delete>
+
+    <delete id="deleteAllReactionsByBoardId">
+        DELETE
+        FROM board_reaction
+        WHERE board_id = #{boardId}
+    </delete>
+
+    <select id="selectReactionType" resultType="String">
+        SELECT reaction_type
+        FROM board_reaction
+        WHERE board_id = #{boardId}
+          AND user_id = #{userId}
+    </select>
+
     <insert id="insertBoardReaction">
         INSERT INTO board_reaction (board_id, user_id, reaction_type)
         VALUES (#{boardId}, #{userId}, #{type})
     </insert>
+
+    <delete id="deleteBoardReaction">
+        DELETE
+        FROM board_reaction
+        WHERE board_id = #{boardId}
+          AND user_id = #{userId}
+    </delete>
 
     <update id="increaseBoardReactionCount">
         UPDATE board
         SET
         <if test="type == 'LIKE'">like_count = like_count + 1</if>
         <if test="type == 'DISLIKE'">dislike_count = dislike_count + 1</if>
+        WHERE board_id = #{boardId}
+    </update>
+
+    <update id="decreaseBoardReactionCount">
+        UPDATE board
+        SET
+        <if test="type == 'LIKE'">like_count = like_count - 1</if>
+        <if test="type == 'DISLIKE'">dislike_count = dislike_count - 1</if>
         WHERE board_id = #{boardId}
     </update>
 
