@@ -1,5 +1,7 @@
 package com.ssafy.bapai.board.dto;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.Data;
@@ -15,7 +17,14 @@ public class CommentDto {
     private String content;
     private int likeCount;
     private int dislikeCount;
-    private String createdAt;
+    private String userLiked;
+    // 작성일 (패턴: 년-월-일 시:분:초)
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime createdAt;
+
+    // 수정일 (추가됨)
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime updatedAt;
 
     // 대댓글 리스트 (계층 구조용)
     private List<CommentDto> children = new ArrayList<>();
