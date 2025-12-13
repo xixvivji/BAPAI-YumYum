@@ -18,7 +18,8 @@ public interface BoardDao {
     long selectBoardCount(Map<String, Object> params);
 
     // 3. 상세 조회
-    BoardDto selectBoardById(Long boardId); // 조회수 증가 없는 단순 조회 (수정/삭제 시 사용)
+
+    BoardDto selectBoardDetail(@Param("boardId") Long boardId, @Param("userId") Long userId);
 
     BoardDto selectBoardDetail(Long boardId); // (선택) 조회수 증가나 상세 정보가 더 필요하다면 구분해서 사용
 

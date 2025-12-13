@@ -48,34 +48,51 @@ public class BoardRestController {
     private final String UPLOAD_DIR = System.getProperty("user.dir") + "/uploads/";
 
     // 1. 게시글 목록 조회
-    @Operation(summary = "게시글 목록 조회", description = "페이징 및 검색(key: title/content/nickname, word: 검색어) 지원")
+    @Operation(summary = "게시글 목록 조회", description = "로그인 시 userLiked(본인 반응) 포함")
     @GetMapping
     public ResponseEntity<PageResponse<BoardDto>> getList(
-            @Parameter(description = "페이지 번호 (1부터 시작)", example = "1")
             @RequestParam(defaultValue = "1") int page,
-
-            @Parameter(description = "페이지 크기", example = "10")
             @RequestParam(defaultValue = "10") int size,
-
-            @Parameter(description = "카테고리 필터 (FREE, REVIEW, EXPERT)", example = "FREE")
             @RequestParam(required = false) String category,
-
-            @Parameter(description = "검색 키워드 (title, content, nickname)", example = "title")
             @RequestParam(required = false) String key,
+            @RequestParam(required = false) String word,
 
-            @Parameter(description = "검색어", example = "맛집")
-            @RequestParam(required = false) String word) {
+            // ★ [추가] 토큰 받기 (비회원도 가능하니 required=false)
+            @Parameter(hidden = true)
+            @RequestHeader(value = "Authorization", required = false) String token) {
 
-        return ResponseEntity.ok(boardService.getBoardList(page, size, category, key, word));
+        // 유저 ID 추출 (없으면 null)
+        Long userId = getUserIdIfExist(token);
+
+        return ResponseEntity.ok(
+                boardService.getBoardList(page, size, category, key, word, userId));
     }
 
     // 2. 게시글 상세 조회
-    @Operation(summary = "게시글 상세 조회", description = "게시글 ID로 상세 내용을 조회하고 조회수를 1 증가시킵니다.")
+    @Operation(summary = "게시글 상세 조회", description = "로그인 시 userLiked 포함")
     @GetMapping("/{boardId}")
     public ResponseEntity<BoardDto> getDetail(
-            @Parameter(description = "조회할 게시글 ID", example = "1")
-            @PathVariable Long boardId) {
-        return ResponseEntity.ok(boardService.getBoardDetail(boardId));
+            @PathVariable Long boardId,
+
+            // ★ [추가] 토큰 받기
+            @Parameter(hidden = true)
+            @RequestHeader(value = "Authorization", required = false) String token) {
+
+        Long userId = getUserIdIfExist(token);
+
+        return ResponseEntity.ok(boardService.getBoardDetail(boardId, userId));
+    }
+
+    // [Helper] 토큰이 있으면 ID 반환, 없거나 에러면 null 반환
+    private Long getUserIdIfExist(String token) {
+        if (token != null && token.startsWith("Bearer ")) {
+            try {
+                return jwtUtil.getUserId(token.substring(7));
+            } catch (Exception e) {
+                return null; // 토큰 만료 등 문제 시 그냥 비회원 취급
+            }
+        }
+        return null;
     }
 
     // =====================================================================

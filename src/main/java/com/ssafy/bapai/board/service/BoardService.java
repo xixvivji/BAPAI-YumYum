@@ -7,9 +7,10 @@ public interface BoardService {
 
     // 페이징 적용된 목록 조회
     PageResponse<BoardDto> getBoardList(int page, int size, String category, String key,
-                                        String word); // 검색 추가
+                                        String word, Long userId);
 
-    BoardDto getBoardDetail(Long boardId);
+    BoardDto getBoardDetail(Long boardId, Long userId);
+
 
     void writeBoard(BoardDto boardDto);
 

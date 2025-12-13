@@ -25,4 +25,5 @@ public class BoardDto {
     private LocalDateTime updatedAt;
     private int likeCount;    // 추천
     private int dislikeCount; // 비추천
+    private String userLiked;
 }
