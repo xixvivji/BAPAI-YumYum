@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -34,7 +35,7 @@ public class MemberDto {
     @Schema(description = "이메일 (연락처)", example = "test01@ssafy.com")
     private String email;
 
-    // ★ 핵심: 응답(Response)으로 나갈 때는 이 필드를 숨김 (비밀번호 유출 방지)
+    // 응답(Response)으로 나갈 때는 숨김
     @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     @Schema(description = "비밀번호 (소셜 로그인은 생략 가능)", example = "1234")
     private String password;
@@ -48,9 +49,6 @@ public class MemberDto {
     @Size(min = 2, max = 10, message = "닉네임은 2~10자 사이여야 합니다.")
     @Schema(description = "사용자 닉네임 (중복 불가)", example = "냠냠박사")
     private String nickname;
-
-//    @Schema(description = "프로필 이미지 URL", example = "/images/default_profile.png")
-//    private String profileImg; // [추가됨]
 
     // ==========================
     // 2. 권한 및 소셜 정보 (서버 관리)
@@ -78,14 +76,14 @@ public class MemberDto {
     @Schema(description = "키 (cm)", example = "175.5")
     private Double height;
 
-    @Schema(description = "몸무게 (kg)", example = "72.0")
+    @Schema(description = "몸무게 (kg) - 가입 시 초기 기록으로도 사용됨", example = "72.0")
     private Double weight;
 
     @Schema(description = "활동량 (LOW, NORMAL, HIGH)", example = "NORMAL")
     private String activityLevel;
 
     // ==========================
-    // 4. 분석 데이터
+    // 4. 분석 데이터 및 건강 선택 (수정됨)
     // ==========================
 
     @Schema(description = "식단 목표 (LOSS, MAINTAIN, GAIN)", example = "LOSS")
@@ -94,11 +92,13 @@ public class MemberDto {
     @Schema(description = "분석된 권장 칼로리 (서버 자동계산)", hidden = true)
     private Double customTdee;
 
-    @Schema(description = "기저질환 태그 (콤마 구분)", example = "DIABETES,HYPERTENSION")
-    private String diseaseCodes;
+    // ★ [수정] String codes 삭제 -> List<Integer> ids 추가
+    // 프론트에서 체크박스로 선택한 ID 목록을 배열로 받습니다.
+    @Schema(description = "선택한 질병 ID 목록", example = "[1, 3, 5]")
+    private List<Integer> diseaseIds;
 
-    @Schema(description = "알레르기 태그 (콤마 구분)", example = "PEACH,SHRIMP")
-    private String allergyCodes;
+    @Schema(description = "선택한 알레르기 ID 목록", example = "[2, 6]")
+    private List<Integer> allergyIds;
 
     // ==========================
     // 5. 시스템 로그 (읽기 전용)

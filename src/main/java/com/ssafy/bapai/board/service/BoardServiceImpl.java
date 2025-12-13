@@ -20,16 +20,18 @@ public class BoardServiceImpl implements BoardService {
 
     @Override
     public PageResponse<BoardDto> getBoardList(int page, int size, String category, String key,
-                                               String word) {
+                                               String word, Long userId) {
         int offset = (page - 1) * size;
 
-        // 검색 조건 Map에 담기
         Map<String, Object> params = new HashMap<>();
         params.put("size", size);
         params.put("offset", offset);
         params.put("category", category);
         params.put("key", key);
         params.put("word", word);
+
+        // ★ [추가] 맵에 userId 담기 (XML에서 쓸 거임)
+        params.put("userId", userId);
 
         List<BoardDto> list = boardDao.selectBoardList(params);
         long totalElements = boardDao.selectBoardCount(params);
@@ -38,11 +40,13 @@ public class BoardServiceImpl implements BoardService {
     }
 
     @Override
-    public BoardDto getBoardDetail(Long boardId) {
+    public BoardDto getBoardDetail(Long boardId, Long userId) {
         boardDao.updateHit(boardId);
-        return boardDao.selectBoardDetail(boardId);
+        // ★ [변경] userId도 같이 넘김
+        return boardDao.selectBoardDetail(boardId, userId);
     }
 
+   
     @Override
     public void writeBoard(BoardDto boardDto) {
         boardDao.insertBoard(boardDto);
@@ -50,7 +54,7 @@ public class BoardServiceImpl implements BoardService {
 
     @Override
     public void modifyBoard(BoardDto boardDto) {
-   
+
         boardDao.updateBoard(boardDto);
     }
 
