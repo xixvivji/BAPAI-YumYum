@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api")
 @RequiredArgsConstructor
-@Tag(name = "05. Challenge & Meal", description = "팀 챌린지 및 식단 인증")
+@Tag(name = "8. Challenge & Meal", description = "팀 챌린지 및 식단 인증")
 public class ChallengeController {
 
     private final ChallengeService challengeService;

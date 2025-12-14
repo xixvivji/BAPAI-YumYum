@@ -1,4 +1,4 @@
-package com.ssafy.bapai.challenge.dto;
+package com.ssafy.bapai.report.dto;
 
 import java.time.LocalDate;
 import lombok.Data;
