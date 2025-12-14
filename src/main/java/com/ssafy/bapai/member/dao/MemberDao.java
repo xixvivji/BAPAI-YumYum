@@ -8,14 +8,13 @@ import org.apache.ibatis.annotations.Param;
 public interface MemberDao {
     int insertMember(MemberDto member);
 
-    // [수정] LoginId -> Username
+    // LoginId -> Username
     MemberDto selectMemberByUsername(String username);
 
     MemberDto selectMemberByEmail(String email);
 
     MemberDto selectMemberById(Long userId);
 
-    // [수정] LoginId -> Username
     MemberDto selectMemberByUsernameAndEmail(@Param("username") String username,
                                              @Param("email") String email);
 
@@ -23,7 +22,6 @@ public interface MemberDao {
 
     int checkNickname(String nickname);
 
-    // [수정] LoginId -> Username
     int checkUsername(String username);
 
     int updateMember(MemberDto member);
@@ -37,4 +35,10 @@ public interface MemberDao {
     int updateTempPassword(MemberDto member);
 
     void deleteRefreshToken(Long userId);
+
+    // 회원가입 시 초기 몸무게 기록용
+    void insertWeightHistory(@Param("userId") Long userId, @Param("weight") double weight);
+
+    // 영양 분석 서비스에서 호출하는 메서드
+    MemberDto selectMemberDetail(Long userId);
 }

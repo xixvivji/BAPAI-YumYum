@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.ssafy.bapai.challenge.dao.ChallengeDao">
+
+    <insert id="insertChallenge" useGeneratedKeys="true" keyProperty="challengeId">
+        INSERT INTO challenge (team_id, title, content, start_date, end_date, goal_type, target_count, min_score,
+                               created_at)
+        VALUES (#{teamId}, #{title}, #{content}, #{startDate}, #{endDate}, #{goalType}, #{targetCount}, #{minScore},
+                NOW())
+    </insert>
+
+    <select id="selectListByTeamId" resultType="com.ssafy.bapai.challenge.dto.ChallengeDto">
+        SELECT *,
+               CASE
+                   WHEN NOW() BETWEEN start_date AND end_date THEN 'PROGRESS'
+                   WHEN NOW() &lt; start_date THEN 'WAIT'
+                   ELSE 'CLOSED' END AS status
+        FROM challenge
+        WHERE team_id = #{teamId}
+        ORDER BY start_date DESC
+    </select>
+
+    <select id="selectDetail" resultType="com.ssafy.bapai.challenge.dto.ChallengeDto">
+        SELECT *
+        FROM challenge
+        WHERE challenge_id = #{challengeId}
+    </select>
+
+    <insert id="joinChallenge">
+        INSERT INTO challenge_member (challenge_id, user_id, status, current_count, joined_at)
+        VALUES (#{challengeId}, #{userId}, 'IN_PROGRESS', 0, NOW())
+    </insert>
+
+    <select id="checkJoined" resultType="int">
+        SELECT COUNT(*)
+        FROM challenge_member
+        WHERE challenge_id = #{challengeId}
+          AND user_id = #{userId}
+    </select>
+
+    <update id="increaseCurrentCount">
+        UPDATE challenge_member
+        SET current_count = current_count + 1
+        WHERE challenge_id = #{challengeId}
+          AND user_id = #{userId}
+    </update>
+
+    <update id="updateStatusSuccess">
+        UPDATE challenge_member
+        SET status = 'SUCCESS'
+        WHERE challenge_id = #{challengeId}
+          AND user_id = #{userId}
+    </update>
+
+    <select id="selectCurrentCount" resultType="int">
+        SELECT current_count
+        FROM challenge_member
+        WHERE challenge_id = #{challengeId}
+          AND user_id = #{userId}
+    </select>
+
+    <insert id="insertMealLog">
+        INSERT INTO meal_log (user_id, challenge_id, img_url, content,
+                              menu_name, calories, carbs, protein, fat, score, created_at)
+        VALUES (#{userId}, #{challengeId}, #{imgUrl}, #{content},
+                #{menuName}, #{calories}, #{carbs}, #{protein}, #{fat}, #{score}, NOW())
+    </insert>
+
+    <insert id="insertReportLog">
+        INSERT INTO report_log (user_id, report_type, start_date, end_date, score_average, ai_message, created_at)
+        VALUES (#{userId}, #{reportType}, #{startDate}, #{endDate}, #{scoreAverage}, #{aiMessage}, NOW())
+    </insert>
+
+</mapper>

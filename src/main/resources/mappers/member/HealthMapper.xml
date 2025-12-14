@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.ssafy.bapai.member.dao.HealthDao">
+
+    <select id="selectAllDiseases" resultType="com.ssafy.bapai.member.dto.OptionDto">
+        SELECT disease_id as id, name FROM disease
+    </select>
+
+    <select id="selectAllAllergies" resultType="com.ssafy.bapai.member.dto.OptionDto">
+        SELECT allergy_id as id, name FROM allergy
+    </select>
+
+    <insert id="insertMemberDiseases">
+        INSERT INTO member_disease (user_id, disease_id) VALUES
+        <foreach collection="diseaseIds" item="dId" separator=",">
+            (#{userId}, #{dId})
+        </foreach>
+    </insert>
+
+    <insert id="insertMemberAllergies">
+        INSERT INTO member_allergy (user_id, allergy_id) VALUES
+        <foreach collection="allergyIds" item="aId" separator=",">
+            (#{userId}, #{aId})
+        </foreach>
+    </insert>
+</mapper>

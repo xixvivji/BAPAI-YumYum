@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.ssafy.bapai.member.dao.MemberGoalDao">
+
+    <insert id="insertGoal">
+        INSERT INTO member_goal (user_id, activity_level, diet_goal,
+                                 bmr, tdee, rec_calories, rec_carbs, rec_protein, rec_fat, updated_at)
+        VALUES (#{userId}, #{activityLevel}, #{dietGoal},
+                #{bmr}, #{tdee}, #{recCalories}, #{recCarbs}, #{recProtein}, #{recFat}, NOW())
+    </insert>
+
+    <update id="updateGoal">
+        UPDATE member_goal
+        SET activity_level = #{activityLevel},
+            diet_goal      = #{dietGoal},
+            bmr            = #{bmr},
+            tdee           = #{tdee},
+            rec_calories   = #{recCalories},
+            rec_carbs      = #{recCarbs},
+            rec_protein    = #{recProtein},
+            rec_fat        = #{recFat},
+            updated_at     = NOW()
+        WHERE user_id = #{userId}
+    </update>
+
+    <select id="checkExist" resultType="int">
+        SELECT COUNT(*)
+        FROM member_goal
+        WHERE user_id = #{userId}
+    </select>
+
+    <select id="selectGoalByUserId" resultType="com.ssafy.bapai.member.dto.MemberGoalDto">
+        SELECT *
+        FROM member_goal
+        WHERE user_id = #{userId}
+    </select>
+
+</mapper>

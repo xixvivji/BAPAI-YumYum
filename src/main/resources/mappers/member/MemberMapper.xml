@@ -4,11 +4,27 @@
 
 <mapper namespace="com.ssafy.bapai.member.dao.MemberDao">
 
-    <insert id="insertMember" parameterType="com.ssafy.bapai.member.dto.MemberDto" useGeneratedKeys="true"
-            keyProperty="userId">
-        INSERT INTO member (username, email, password, name, nickname, role, provider, provider_id, status, joined_at)
-        VALUES (#{username}, #{email}, #{password}, #{name}, #{nickname}, 'ROLE_GUEST', #{provider}, #{providerId},
-                'ACTIVE', NOW())
+    <insert id="insertMember" parameterType="com.ssafy.bapai.member.dto.MemberDto">
+        <selectKey keyProperty="userId" resultType="long" order="AFTER">
+            SELECT LAST_INSERT_ID()
+        </selectKey>
+
+        INSERT INTO member (
+        username, password, email, name, nickname,
+        height, weight, activity_level, diet_goal,
+        birth_year, gender,
+        role, provider, provider_id, joined_at, status
+        ) VALUES (
+        #{username}, #{password}, #{email}, #{name}, #{nickname},
+        #{height}, #{weight}, #{activityLevel}, #{dietGoal},
+        #{birthYear}, #{gender},
+        'ROLE_USER', #{provider}, #{providerId}, NOW(), 'ACTIVE'
+        )
+    </insert>
+
+    <insert id="insertWeightHistory">
+        INSERT INTO weight_history (user_id, weight, recorded_at)
+        VALUES (#{userId}, #{weight}, NOW())
     </insert>
 
     <select id="selectMemberByUsername" parameterType="string" resultType="com.ssafy.bapai.member.dto.MemberDto">
@@ -36,38 +52,47 @@
           AND email = #{email}
     </select>
 
+    <select id="checkEmail" parameterType="string" resultType="int">
+        SELECT COUNT(*)
+        FROM member
+        WHERE email = #{email}
+    </select>
+    <select id="checkNickname" parameterType="string" resultType="int">
+        SELECT COUNT(*)
+        FROM member
+        WHERE nickname = #{nickname}
+    </select>
     <select id="checkUsername" parameterType="string" resultType="int">
         SELECT COUNT(*)
         FROM member
         WHERE username = #{username}
     </select>
 
-    <select id="checkEmail" parameterType="string" resultType="int">
-        SELECT COUNT(*)
+    <select id="selectMemberDetail" resultType="com.ssafy.bapai.member.dto.MemberDto">
+        SELECT user_id        AS userId,
+               email,
+               name,
+               nickname,
+               birth_year     AS birthYear,
+               gender,
+               height,
+               weight,
+               activity_level AS activityLevel,
+               diet_goal      AS dietGoal,
+               joined_at      AS joinedAt
         FROM member
-        WHERE email = #{email}
-    </select>
-
-    <select id="checkNickname" parameterType="string" resultType="int">
-        SELECT COUNT(*)
-        FROM member
-        WHERE nickname = #{nickname}
+        WHERE user_id = #{userId}
     </select>
 
     <update id="updateMember" parameterType="com.ssafy.bapai.member.dto.MemberDto">
         UPDATE member
         <set>
-            <if test="name != null">name = #{name},</if>
             <if test="nickname != null">nickname = #{nickname},</if>
-            <if test="birthYear != null">birth_year = #{birthYear},</if>
-            <if test="gender != null">gender = #{gender},</if>
             <if test="height != null">height = #{height},</if>
             <if test="weight != null">weight = #{weight},</if>
             <if test="activityLevel != null">activity_level = #{activityLevel},</if>
             <if test="dietGoal != null">diet_goal = #{dietGoal},</if>
             <if test="customTdee != null">custom_tdee = #{customTdee},</if>
-            <if test="diseaseCodes != null">disease_codes = #{diseaseCodes},</if>
-            <if test="allergyCodes != null">allergy_codes = #{allergyCodes},</if>
             <if test="role != null">role = #{role},</if>
             <if test="status != null">status = #{status},</if>
             updated_at = NOW()
@@ -82,6 +107,7 @@
             updated_at       = NOW()
         WHERE user_id = #{userId}
     </update>
+
     <update id="updateTempPassword" parameterType="com.ssafy.bapai.member.dto.MemberDto">
         UPDATE member
         SET password         = #{password},
@@ -89,19 +115,23 @@
             updated_at       = NOW()
         WHERE user_id = #{userId}
     </update>
+
     <update id="updateLastLogin">
         UPDATE member
         SET last_login_at = NOW()
         WHERE user_id = #{userId}
     </update>
+
     <update id="deleteMember">
         UPDATE member
         SET status = 'WITHDRAWN'
         WHERE user_id = #{userId}
     </update>
-    <update id="deleteRefreshToken">
+
+    <delete id="deleteRefreshToken">
         UPDATE member
         SET refresh_token = NULL
         WHERE user_id = #{userId}
-    </update>
+    </delete>
+
 </mapper>
