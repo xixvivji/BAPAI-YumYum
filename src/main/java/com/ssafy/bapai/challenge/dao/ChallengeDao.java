@@ -2,7 +2,7 @@ package com.ssafy.bapai.challenge.dao;
 
 import com.ssafy.bapai.challenge.dto.ChallengeDto;
 import com.ssafy.bapai.challenge.dto.MealLogDto;
-import com.ssafy.bapai.challenge.dto.ReportLogDto;
+import com.ssafy.bapai.report.dto.ReportLogDto;
 import java.util.List;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
