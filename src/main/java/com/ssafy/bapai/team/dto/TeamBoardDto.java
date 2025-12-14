@@ -1,0 +1,19 @@
+package com.ssafy.bapai.team.dto;
+
+import java.time.LocalDateTime;
+import lombok.Data;
+
+@Data
+public class TeamBoardDto {
+    private Long tbId;
+    private Long teamId;
+    private Long userId;
+    private String type; // NOTICE, FREE
+    private String title;
+    private String content;
+    private LocalDateTime createdAt;
+
+    // 화면 표시용
+    private String writerNickname;
+    private boolean isWriter;
+}

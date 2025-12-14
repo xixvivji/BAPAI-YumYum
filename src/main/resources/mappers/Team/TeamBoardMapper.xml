@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.ssafy.bapai.team.dao.TeamBoardDao">
+    <insert id="insertBoard">
+        INSERT INTO team_board (team_id, user_id, type, title, content, created_at)
+        VALUES (#{teamId}, #{userId}, #{type}, #{title}, #{content}, NOW())
+    </insert>
+
+    <select id="selectBoardList" resultType="com.ssafy.bapai.team.dto.TeamBoardDto">
+        SELECT tb.*, m.nickname AS writerNickname
+        FROM team_board tb
+                 JOIN member m ON tb.user_id = m.user_id
+        WHERE tb.team_id = #{teamId}
+        ORDER BY CASE WHEN tb.type = 'NOTICE' THEN 1 ELSE 2 END ASC, tb.created_at DESC
+    </select>
+
+    <select id="selectBoardDetail" resultType="com.ssafy.bapai.team.dto.TeamBoardDto">
+        SELECT tb.*, m.nickname AS writerNickname
+        FROM team_board tb
+                 JOIN member m ON tb.user_id = m.user_id
+        WHERE tb.tb_id = #{tbId}
+    </select>
+
+    <delete id="deleteBoard">DELETE
+                             FROM team_board
+                             WHERE tb_id = #{tbId}</delete>
+</mapper>
