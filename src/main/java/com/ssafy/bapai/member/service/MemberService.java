@@ -1,6 +1,9 @@
 package com.ssafy.bapai.member.service;
 
 import com.ssafy.bapai.member.dto.MemberDto;
+import com.ssafy.bapai.member.dto.OptionDto;
+import java.util.List;
+import java.util.Map;
 import org.springframework.transaction.annotation.Transactional;
 
 public interface MemberService {
@@ -46,4 +49,6 @@ public interface MemberService {
 
     // 소셜 로그인
     MemberDto socialLogin(String email, String name, String provider, String providerId);
+
+    Map<String, List<OptionDto>> getHealthOptions();
 }

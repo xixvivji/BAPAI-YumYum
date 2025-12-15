@@ -3,6 +3,10 @@ package com.ssafy.bapai.member.service;
 import com.ssafy.bapai.member.dao.HealthDao;
 import com.ssafy.bapai.member.dao.MemberDao;
 import com.ssafy.bapai.member.dto.MemberDto;
+import com.ssafy.bapai.member.dto.OptionDto;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -220,5 +224,18 @@ public class MemberServiceImpl implements MemberService {
 
         memberDao.updateLastLogin(member.getUserId());
         return member;
+    }
+
+    @Override
+    public Map<String, List<OptionDto>> getHealthOptions() {
+        Map<String, List<OptionDto>> options = new HashMap<>();
+
+        // 1. 질병 목록 조회
+        options.put("diseases", healthDao.selectAllDiseases());
+
+        // 2. 알레르기 목록 조회
+        options.put("allergies", healthDao.selectAllAllergies());
+
+        return options;
     }
 }
