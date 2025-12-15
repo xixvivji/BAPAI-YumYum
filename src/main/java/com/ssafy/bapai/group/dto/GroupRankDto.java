@@ -1,9 +1,9 @@
-package com.ssafy.bapai.team.dto;
+package com.ssafy.bapai.group.dto;
 
 import lombok.Data;
 
 @Data
-public class TeamRankDto {
+public class GroupRankDto {
     private int rank;           // 등수
     private Long userId;
     private String nickname;

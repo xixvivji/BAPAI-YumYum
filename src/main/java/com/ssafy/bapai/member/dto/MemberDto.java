@@ -92,7 +92,7 @@ public class MemberDto {
     @Schema(description = "분석된 권장 칼로리 (서버 자동계산)", hidden = true)
     private Double customTdee;
 
-    // ★ [수정] String codes 삭제 -> List<Integer> ids 추가
+    // List<Integer> ids 추가
     // 프론트에서 체크박스로 선택한 ID 목록을 배열로 받습니다.
     @Schema(description = "선택한 질병 ID 목록", example = "[1, 3, 5]")
     private List<Integer> diseaseIds;
