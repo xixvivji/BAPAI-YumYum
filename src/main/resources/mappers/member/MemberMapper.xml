@@ -4,6 +4,29 @@
 
 <mapper namespace="com.ssafy.bapai.member.dao.MemberDao">
 
+    <resultMap id="MemberResultMap" type="com.ssafy.bapai.member.dto.MemberDto">
+        <id property="userId" column="user_id"/>
+        <result property="username" column="username"/>
+        <result property="password" column="password"/>
+        <result property="email" column="email"/>
+        <result property="name" column="name"/>
+        <result property="nickname" column="nickname"/>
+        <result property="role" column="role"/>
+        <result property="provider" column="provider"/>
+        <result property="providerId" column="provider_id"/>
+        <result property="birthYear" column="birth_year"/>
+        <result property="gender" column="gender"/>
+        <result property="height" column="height"/>
+        <result property="weight" column="weight"/>
+        <result property="activityLevel" column="activity_level"/>
+        <result property="dietGoal" column="diet_goal"/>
+        <result property="customTdee" column="custom_tdee"/>
+        <result property="status" column="status"/>
+        <result property="joinedAt" column="joined_at"/>
+        <result property="lastLoginAt" column="last_login_at"/>
+        <result property="isTempPassword" column="is_temp_password"/>
+    </resultMap>
+
     <insert id="insertMember" parameterType="com.ssafy.bapai.member.dto.MemberDto">
         <selectKey keyProperty="userId" resultType="long" order="AFTER">
             SELECT LAST_INSERT_ID()
@@ -18,7 +41,7 @@
         #{username}, #{password}, #{email}, #{name}, #{nickname},
         #{height}, #{weight}, #{activityLevel}, #{dietGoal},
         #{birthYear}, #{gender},
-        'ROLE_USER', #{provider}, #{providerId}, NOW(), 'ACTIVE'
+        #{role}, #{provider}, #{providerId}, NOW(), 'ACTIVE'
         )
     </insert>
 
@@ -27,42 +50,42 @@
         VALUES (#{userId}, #{weight}, NOW())
     </insert>
 
-    <select id="selectMemberByUsername" parameterType="string" resultType="com.ssafy.bapai.member.dto.MemberDto">
+    <select id="selectMemberByUsername" resultMap="MemberResultMap">
         SELECT *
         FROM member
         WHERE username = #{username}
     </select>
 
-    <select id="selectMemberByEmail" parameterType="string" resultType="com.ssafy.bapai.member.dto.MemberDto">
+    <select id="selectMemberByEmail" resultMap="MemberResultMap">
         SELECT *
         FROM member
         WHERE email = #{email}
     </select>
 
-    <select id="selectMemberById" parameterType="long" resultType="com.ssafy.bapai.member.dto.MemberDto">
+    <select id="selectMemberById" resultMap="MemberResultMap">
         SELECT *
         FROM member
         WHERE user_id = #{userId}
     </select>
 
-    <select id="selectMemberByUsernameAndEmail" resultType="com.ssafy.bapai.member.dto.MemberDto">
+    <select id="selectMemberByUsernameAndEmail" resultMap="MemberResultMap">
         SELECT *
         FROM member
         WHERE username = #{username}
           AND email = #{email}
     </select>
 
-    <select id="checkEmail" parameterType="string" resultType="int">
+    <select id="checkEmail" resultType="int">
         SELECT COUNT(*)
         FROM member
         WHERE email = #{email}
     </select>
-    <select id="checkNickname" parameterType="string" resultType="int">
+    <select id="checkNickname" resultType="int">
         SELECT COUNT(*)
         FROM member
         WHERE nickname = #{nickname}
     </select>
-    <select id="checkUsername" parameterType="string" resultType="int">
+    <select id="checkUsername" resultType="int">
         SELECT COUNT(*)
         FROM member
         WHERE username = #{username}
@@ -108,7 +131,7 @@
         WHERE user_id = #{userId}
     </update>
 
-    <update id="updateTempPassword" parameterType="com.ssafy.bapai.member.dto.MemberDto">
+    <update id="updateTempPassword">
         UPDATE member
         SET password         = #{password},
             is_temp_password = true,
@@ -129,9 +152,9 @@
     </update>
 
     <delete id="deleteRefreshToken">
-        UPDATE member
-        SET refresh_token = NULL
-        WHERE user_id = #{userId}
+        DELETE
+        FROM refresh_token
+        WHERE rt_key = #{userId}
     </delete>
 
 </mapper>

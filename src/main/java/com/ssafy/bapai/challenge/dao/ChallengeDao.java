@@ -1,6 +1,7 @@
 package com.ssafy.bapai.challenge.dao;
 
 import com.ssafy.bapai.challenge.dto.ChallengeDto;
+import com.ssafy.bapai.challenge.dto.ChallengePresetDto;
 import com.ssafy.bapai.challenge.dto.MealLogDto;
 import com.ssafy.bapai.report.dto.ReportLogDto;
 import java.util.List;
@@ -12,7 +13,8 @@ public interface ChallengeDao {
     // 1. 챌린지 관리
     void insertChallenge(ChallengeDto dto);
 
-    List<ChallengeDto> selectListByTeamId(Long teamId);
+    // selectListByTeamId -> selectListByGroupId 변경
+    List<ChallengeDto> selectListByGroupId(Long groupId);
 
     ChallengeDto selectDetail(Long challengeId);
 
@@ -21,21 +23,18 @@ public interface ChallengeDao {
 
     int checkJoined(@Param("challengeId") Long challengeId, @Param("userId") Long userId);
 
-    // 진행도 업데이트 (핵심!)
     void increaseCurrentCount(@Param("challengeId") Long challengeId, @Param("userId") Long userId);
 
     void updateStatusSuccess(@Param("challengeId") Long challengeId, @Param("userId") Long userId);
 
-    // 멤버 상태 조회
     int selectCurrentCount(@Param("challengeId") Long challengeId, @Param("userId") Long userId);
 
     // 3. 식단 기록 (MealLog)
     void insertMealLog(MealLogDto dto);
 
-    List<MealLogDto> selectMealListByChallenge(Long challengeId);
-
-    List<MealLogDto> selectMealListByUser(Long userId);
-
-    // 4. 리포트 로그 (통계)
+    // 4. 리포트 로그
     void insertReportLog(ReportLogDto dto);
+
+    // 5. 프리셋 (추천)
+    List<ChallengePresetDto> selectPresetsByKeywords(@Param("keywords") List<String> keywords);
 }
