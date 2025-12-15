@@ -31,7 +31,7 @@ public class JwtUtil {
         return createToken(userId, role, expirationTime);
     }
 
-    // 2. [추가됨] 만료 시간 직접 지정 (리프레시 토큰 등에 사용)
+    // 2. 만료 시간 직접 지정 (리프레시 토큰 등에 사용)
     public String createToken(Long userId, String role, long expireTime) {
         return Jwts.builder()
                 .setSubject(String.valueOf(userId))

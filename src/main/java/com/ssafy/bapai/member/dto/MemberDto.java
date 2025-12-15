@@ -18,9 +18,8 @@ import lombok.NoArgsConstructor;
 @Schema(description = "회원 정보 객체 (요청/응답 공용)")
 public class MemberDto {
 
-    // ==========================
+
     // 1. 기본 계정 정보
-    // ==========================
 
     @Schema(description = "회원 고유 번호 (PK)", accessMode = Schema.AccessMode.READ_ONLY)
     private Long userId;
@@ -50,9 +49,7 @@ public class MemberDto {
     @Schema(description = "사용자 닉네임 (중복 불가)", example = "냠냠박사")
     private String nickname;
 
-    // ==========================
     // 2. 권한 및 소셜 정보 (서버 관리)
-    // ==========================
 
     @Schema(description = "권한 (ROLE_GUEST: 미인증, ROLE_USER: 정회원)", example = "ROLE_USER", accessMode = Schema.AccessMode.READ_ONLY)
     private String role;
@@ -63,9 +60,8 @@ public class MemberDto {
     @Schema(description = "소셜 식별값", hidden = true)
     private String providerId;
 
-    // ==========================
+
     // 3. 신체 및 건강 정보 (2단계 입력)
-    // ==========================
 
     @Schema(description = "출생년도", example = "1998")
     private Integer birthYear;
@@ -82,9 +78,8 @@ public class MemberDto {
     @Schema(description = "활동량 (LOW, NORMAL, HIGH)", example = "NORMAL")
     private String activityLevel;
 
-    // ==========================
+
     // 4. 분석 데이터 및 건강 선택 (수정됨)
-    // ==========================
 
     @Schema(description = "식단 목표 (LOSS, MAINTAIN, GAIN)", example = "LOSS")
     private String dietGoal;
@@ -93,16 +88,15 @@ public class MemberDto {
     private Double customTdee;
 
     // List<Integer> ids 추가
-    // 프론트에서 체크박스로 선택한 ID 목록을 배열로 받습니다.
+    // 프론트에서 체크박스로 선택한 ID 목록을 배열로
     @Schema(description = "선택한 질병 ID 목록", example = "[1, 3, 5]")
     private List<Integer> diseaseIds;
 
     @Schema(description = "선택한 알레르기 ID 목록", example = "[2, 6]")
     private List<Integer> allergyIds;
 
-    // ==========================
+
     // 5. 시스템 로그 (읽기 전용)
-    // ==========================
 
     @Schema(description = "계정 상태 (ACTIVE, WITHDRAWN)", hidden = true)
     private String status;

@@ -89,11 +89,11 @@ public class OAuthService {
         }
     }
 
-    // 2. 사용자 정보 가져오기 (수정됨)
+    // 2. 사용자 정보 가져오기
     public Map<String, Object> getUserInfo(String provider, String accessToken) {
         String url;
 
-        // [수정] Provider에 따라 URL 분기 처리 (네이버 추가)
+        //  Provider에 따라 URL 분기 처리
         if ("GOOGLE".equalsIgnoreCase(provider)) {
             url = googleUserInfoUri;
         } else if ("KAKAO".equalsIgnoreCase(provider)) {
@@ -133,8 +133,7 @@ public class OAuthService {
                 result.put("name", nickname);
                 result.put("providerId", String.valueOf(response.get("id")));
 
-            } else if ("NAVER".equalsIgnoreCase(provider)) { // [추가] 네이버 파싱 로직
-                // 네이버는 'response'라는 키 안에 실제 정보가 들어있음
+            } else if ("NAVER".equalsIgnoreCase(provider)) { // 네이버 파싱 로직
                 Map<String, Object> responseObj = (Map<String, Object>) response.get("response");
 
                 result.put("email", responseObj.get("email"));

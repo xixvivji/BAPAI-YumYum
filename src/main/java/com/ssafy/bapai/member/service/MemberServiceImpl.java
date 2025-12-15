@@ -17,7 +17,7 @@ public class MemberServiceImpl implements MemberService {
     private final PasswordEncoder passwordEncoder;
     private final HealthDao healthDao; // ★ 추가됨
 
-    // 1. 회원가입 (모든 로직 통합)
+    // 1. 회원가입
     @Override
     @Transactional
     public void signup(MemberDto member) {
@@ -211,7 +211,7 @@ public class MemberServiceImpl implements MemberService {
 
             member.setPassword("SOCIAL_LOGIN"); // 더미 패스워드
 
-            // ★ 소셜 로그인 시에도 insertMember 사용
+            // 소셜 로그인 시에도 insertMember 사용
             memberDao.insertMember(member);
 
             // 방금 만든 회원 다시 조회

@@ -32,7 +32,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         // 2. 헤더 확인
         String header = request.getHeader("Authorization");
 
-        // [디버깅 로그] - 콘솔에서 이 부분을 확인하세요!
+        //  로그
         System.out.println("============== [필터 시작] ==============");
         System.out.println("요청 URL: " + requestURI);
         System.out.println("헤더 값: " + header);

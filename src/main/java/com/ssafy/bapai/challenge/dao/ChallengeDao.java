@@ -13,7 +13,6 @@ public interface ChallengeDao {
     // 1. 챌린지 관리
     void insertChallenge(ChallengeDto dto);
 
-    // selectListByTeamId -> selectListByGroupId 변경
     List<ChallengeDto> selectListByGroupId(Long groupId);
 
     ChallengeDto selectDetail(Long challengeId);
@@ -29,7 +28,7 @@ public interface ChallengeDao {
 
     int selectCurrentCount(@Param("challengeId") Long challengeId, @Param("userId") Long userId);
 
-    // 3. 식단 기록 (MealLog)
+    // 3. 식단 기록
     void insertMealLog(MealLogDto dto);
 
     // 4. 리포트 로그

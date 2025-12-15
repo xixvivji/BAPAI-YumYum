@@ -18,7 +18,7 @@ public class DietServiceImpl implements DietService {
     @Override
     @Transactional
     public void saveDiet(DietDto dietDto) {
-        // diet 테이블 저장 (PK인 dietId가 생성됨)
+        // diet 테이블 저장
         dietDao.insertDiet(dietDto);
 
         // 생성된 dietId를 가지고 diet_detail 테이블 저장
@@ -55,7 +55,7 @@ public class DietServiceImpl implements DietService {
         return dietDao.selectDietDetail(dietId);
     }
 
-    // 2. 식단 수정 (기존 상세 삭제 -> 재저장 방식)
+    // 2. 식단 수정
     @Override
     @Transactional
     public void updateDiet(DietDto dietDto) {
@@ -77,7 +77,6 @@ public class DietServiceImpl implements DietService {
     @Override
     @Transactional
     public void deleteDiet(Long dietId) {
-        // DB의 ON DELETE CASCADE 설정 덕분에 diet만 지워도 detail은 같이 지워짐
         dietDao.deleteDiet(dietId);
     }
 }

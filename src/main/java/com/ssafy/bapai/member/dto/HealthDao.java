@@ -12,7 +12,7 @@ public interface HealthDao {
 
     List<OptionDto> selectAllAllergies();
 
-    // 회원별 정보 저장 (대량 등록)
+    // 회원별 정보 저장
     void insertMemberDiseases(@Param("userId") Long userId,
                               @Param("diseaseIds") List<Integer> diseaseIds);
 

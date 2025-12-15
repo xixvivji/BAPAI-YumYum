@@ -28,7 +28,6 @@ public class GroupServiceImpl implements GroupService {
         if (groupDto.getTags() != null && !groupDto.getTags().isEmpty()) {
             for (String tagName : groupDto.getTags()) {
                 // 태그 이름으로 ID 조회 (없으면 null 반환한다고 가정)
-                // *실제로는 태그가 없으면 hashtags 테이블에 insert하고 id 받아오는 로직이 필요할 수 있음
                 Long tagId = groupDao.selectTagIdByName(tagName);
                 if (tagId != null) {
                     groupDao.insertGroupHashtag(groupDto.getGroupId(), tagId);

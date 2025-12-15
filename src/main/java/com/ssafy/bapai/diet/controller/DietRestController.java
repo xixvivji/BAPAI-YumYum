@@ -33,7 +33,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class DietRestController {
 
     private final DietService dietService;
-    private final GeminiService geminiService; // ★ [추가] AI 서비스 주입
+    private final GeminiService geminiService; // [추가] AI 서비스 주입
     private final JwtUtil jwtUtil;
 
     // 1. 식단 이미지 AI 분석 (Gemini 연동 완료)
@@ -158,7 +158,7 @@ public class DietRestController {
                     .append(log.getMealType())     // 예: LUNCH
                     .append("] ");
 
-            // 1. 메뉴 이름 (getFoodName() -> getMemo()로 변경)
+            //  메뉴 이름
             // 만약 메모가 비어있으면 "식사"라고만 표시
             if (log.getMemo() != null && !log.getMemo().isEmpty()) {
                 dietSummary.append(log.getMemo());
@@ -169,7 +169,6 @@ public class DietRestController {
             dietSummary.append(" (");
 
             // 2. 칼로리
-            // null 체크 (Double 타입이므로 null일 수 있음)
             if (log.getTotalKcal() != null) {
                 dietSummary.append(log.getTotalKcal());
             } else {
