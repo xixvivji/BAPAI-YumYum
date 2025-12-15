@@ -1,9 +1,12 @@
 package com.ssafy.bapai.challenge.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.bapai.challenge.dao.ChallengeDao;
 import com.ssafy.bapai.challenge.dto.ChallengeDto;
 import com.ssafy.bapai.challenge.dto.ChallengePresetDto;
 import com.ssafy.bapai.challenge.dto.MealLogDto;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -14,6 +17,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class ChallengeService {
 
     private final ChallengeDao challengeDao;
+    private final com.ssafy.bapai.diet.service.GeminiService geminiService;
+    private final ObjectMapper objectMapper;
 
     // 1. 챌린지 생성
     @Transactional
@@ -54,6 +59,24 @@ public class ChallengeService {
             return challengeDao.selectPresetsByKeywords(List.of("일반"));
         }
         return challengeDao.selectPresetsByKeywords(keywords);
+    }
+
+    // AI 방식실시간 생성 추천 (느림)
+    public List<ChallengePresetDto> getAiChallenges(List<String> keywords) {
+        // (1) Gemini 호출
+        String jsonResult = geminiService.recommendChallengesByAI(keywords);
+
+        // (2) String -> List<ChallengePresetDto> 변환
+        try {
+            // JSON 배열 문자열을 자바 객체 배열로 변환
+            ChallengePresetDto[] array =
+                    objectMapper.readValue(jsonResult, ChallengePresetDto[].class);
+            return Arrays.asList(array);
+        } catch (Exception e) {
+            e.printStackTrace();
+            // 파싱 실패 시 빈 리스트 반환 (서버 안 죽게 방어)
+            return Collections.emptyList();
+        }
     }
 
     // --- 내부 로직 ---

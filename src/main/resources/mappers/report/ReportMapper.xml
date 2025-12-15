@@ -34,5 +34,8 @@
             )
           AND ml.created_at BETWEEN #{startDate} AND #{endDate}
     </select>
-
+    <insert id="insertReportLog" parameterType="com.ssafy.bapai.report.dto.ReportLogDto">
+        INSERT INTO report_log (user_id, report_type, start_date, end_date, score_average, ai_message, created_at)
+        VALUES (#{userId}, #{reportType}, #{startDate}, #{endDate}, #{scoreAverage}, #{aiMessage}, NOW())
+    </insert>
 </mapper>
