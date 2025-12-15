@@ -5,7 +5,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 public interface MemberService {
 
-    // ★ 회원가입 (기존 join 로직을 여기로 통합)
+    // 회원가입
     void signup(MemberDto member);
 
     // 로그인

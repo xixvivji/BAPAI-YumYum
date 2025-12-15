@@ -32,8 +32,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api")
 @RequiredArgsConstructor
-// @CrossOrigin("*") // SecurityConfig에서 처리하므로 주석 처리
-@Tag(name = "1. 회원(Member) API", description = "회원가입, 로그인, 마이페이지 등 회원 관련 기능") // [추가]
+@Tag(name = "1. 회원(Member) API", description = "회원가입, 로그인, 마이페이지 등 회원 관련 기능")
 public class MemberRestController {
 
     private final MemberService memberService;
@@ -42,9 +41,8 @@ public class MemberRestController {
     private final OAuthService oAuthService;
     private final RefreshTokenDao refreshTokenDao;
 
-    // ==========================
-    // [1. 인증 & 가입]
-    // ==========================
+
+    // 1. 인증 & 가입
 
     @Operation(summary = "일반 회원가입 (1단계)", description = "아이디, 이메일, 비밀번호, 이름, 닉네임을 입력받아 계정을 생성합니다.")
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -136,7 +134,7 @@ public class MemberRestController {
         return processSocialLogin("NAVER", req.get("code"));
     }
 
-    // [공통 로직]
+    // 공통 로직
     private ResponseEntity<?> processSocialLogin(String provider, String code) {
         try {
             String accessToken = oAuthService.getAccessToken(provider, code);
@@ -177,7 +175,7 @@ public class MemberRestController {
     }
 
     @Operation(summary = "로그아웃", description = "서버 및 DB의 리프레시 토큰을 만료시킵니다.")
-    @PostMapping("/auth/logout") // ★ 중요: /api + /auth/logout = /api/auth/logout
+    @PostMapping("/auth/logout") // /api + /auth/logout = /api/auth/logout
     public ResponseEntity<?> logout(
             @RequestHeader(value = "Authorization", required = false) String token) {
 
@@ -353,9 +351,7 @@ public class MemberRestController {
     }
 
 
-    // ==========================
-    // [2. 회원 정보 & 건강] (토큰 필수)
-    // ==========================
+    // 2. 회원 정보 & 건강 (토큰 필수)
 
     @Operation(summary = "건강 정보 입력 (2단계)", description = "신체 정보를 입력하고 정회원(USER)으로 등업합니다.")
     @PatchMapping("/members/me") // Patch로 통합됨
@@ -404,7 +400,7 @@ public class MemberRestController {
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             content = @Content(
                     examples = @ExampleObject(
-                            // [수정] userId 제거하고 비밀번호만 남김
+                            //  userId 제거하고 비밀번호만 남김
                             value = "{\"newPassword\": \"change1234\"}"
                     )
             )
@@ -412,10 +408,9 @@ public class MemberRestController {
     @PatchMapping("/members/password")
     public ResponseEntity<?> updatePassword(@RequestHeader("Authorization") String token,
                                             @RequestBody Map<String, String> req) {
-        Long userId = jwtUtil.getUserId(token); // 토큰에서 꺼냄 (안전)
+        Long userId = jwtUtil.getUserId(token); // 토큰에서 꺼냄
         String newPassword = req.get("newPassword");
 
-        // (선택사항) 여기서 유효성 검사 추가 가능 (빈값 체크 등)
         if (newPassword == null || newPassword.isBlank()) {
             return ResponseEntity.badRequest().body("새 비밀번호를 입력해주세요.");
         }

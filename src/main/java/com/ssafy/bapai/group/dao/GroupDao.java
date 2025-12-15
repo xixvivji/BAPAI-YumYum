@@ -9,7 +9,7 @@ import org.apache.ibatis.annotations.Param;
 
 @Mapper
 public interface GroupDao {
-    // 1. 모임(Groups) CRUD
+    // 1. 모임 CRUD
     void insertGroup(GroupDto groupDto);
 
     List<GroupDto> selectGroupList(Map<String, Object> params);
@@ -18,8 +18,7 @@ public interface GroupDao {
 
     void updateGroupOwner(@Param("groupId") Long groupId, @Param("newOwnerId") Long newOwnerId);
 
-    // 2. 멤버(GroupMember) 관리
-    // role: LEADER, MEMBER (DB Enum에 맞춤)
+    // 2. 멤버 관리
     void insertGroupMember(@Param("groupId") Long groupId, @Param("userId") Long userId,
                            @Param("role") String role);
 
@@ -35,9 +34,7 @@ public interface GroupDao {
     void updateMemberRole(@Param("groupId") Long groupId, @Param("userId") Long userId,
                           @Param("role") String role);
 
-    // 3. 해시태그(GroupHashtags) 관리 (NEW)
-    // 태그 이름으로 태그 ID를 조회하거나 없으면 생성하는 로직은 Service/SQL에서 처리 필요
-    // 여기서는 매핑 테이블(group_hashtags) 삽입 예시
+    // 3.  해시태그 관리
     void insertGroupHashtag(@Param("groupId") Long groupId, @Param("tagId") Long tagId);
 
     // 특정 모임의 태그 이름 목록 조회

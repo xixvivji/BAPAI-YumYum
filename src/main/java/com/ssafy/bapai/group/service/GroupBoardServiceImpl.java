@@ -47,7 +47,7 @@ public class GroupBoardServiceImpl {
         GroupBoardDto dto = groupBoardDao.selectBoardDetail(boardId);
         String role = groupDao.selectMyRole(dto.getGroupId(), userId);
 
-        // 작성자 본인이거나 방장(LEADER)이면 삭제 가능
+        // 작성자 본인이거나 방장이면 삭제 가능
         if (!dto.getUserId().equals(userId) && !"LEADER".equals(role)) {
             throw new IllegalStateException("삭제 권한 없음");
         }

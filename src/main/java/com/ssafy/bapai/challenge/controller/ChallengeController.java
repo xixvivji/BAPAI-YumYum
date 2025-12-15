@@ -27,7 +27,6 @@ public class ChallengeController {
     private final JwtUtil jwtUtil;
 
     // --- 챌린지 관련 ---
-
     // URL 변경: /teams -> /groups
     @PostMapping("/groups/{groupId}/challenges")
     @Operation(summary = "챌린지 생성", description = "goalType(COUNT), targetCount(목표횟수) 필수")
@@ -57,8 +56,7 @@ public class ChallengeController {
         return ResponseEntity.ok("참여 완료!");
     }
 
-    // --- 식단 인증 관련 ---
-
+    // 식단 인증 관련
     @PostMapping("/meals")
     @Operation(summary = "식단 기록 (챌린지 인증 포함)", description = "challengeId가 있으면 챌린지 카운트 반영")
     public ResponseEntity<?> recordMeal(
