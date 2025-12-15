@@ -28,7 +28,7 @@ public interface CommentDao {
     void increaseCommentReactionCount(@Param("commentId") Long commentId,
                                       @Param("type") String type);
 
-    // 3. 내가 어떤 반응(LIKE/DISLIKE)을 했는지 조회 (취소할 때 필요)
+    // 3. 내가 어떤 반응을 했는지 조회 (취소할 때 필요)
     String selectReactionType(@Param("commentId") Long commentId, @Param("userId") Long userId);
 
     // 4. 반응 기록 삭제 (취소)

@@ -10,18 +10,15 @@ import org.apache.ibatis.annotations.Param;
 public interface BoardDao {
 
     // 1. 목록 조회 (검색 + 페이징 + 카테고리)
-    // Map 안에 category, key, word, limit, offset 등이 다 들어옵니다.
     List<BoardDto> selectBoardList(Map<String, Object> params);
 
-    // 2. 전체 개수 조회 (검색 조건에 맞는 개수여야 페이징이 정확함)
-    // 기존: long countBoardList(String category); -> 변경: Map 사용
+    // 2. 전체 개수 조회
     long selectBoardCount(Map<String, Object> params);
 
     // 3. 상세 조회
-
     BoardDto selectBoardDetail(@Param("boardId") Long boardId, @Param("userId") Long userId);
 
-    BoardDto selectBoardDetail(Long boardId); // (선택) 조회수 증가나 상세 정보가 더 필요하다면 구분해서 사용
+    BoardDto selectBoardDetail(Long boardId);
 
     // 4. CRUD
     void insertBoard(BoardDto boardDto);
@@ -32,16 +29,15 @@ public interface BoardDao {
 
     void updateHit(Long boardId);
 
-    // ==========================================
-    // [연쇄 삭제용 Helper] 게시글 삭제 시 같이 지워야 할 것들
-    // ==========================================
+
+    //게시글 삭제 시 같이 지워야 할 것들
+
     void deleteCommentsByBoardId(Long boardId);      // 해당 게시글의 댓글 전체 삭제
 
     void deleteAllReactionsByBoardId(Long boardId);  // 해당 게시글의 좋아요 기록 전체 삭제
 
-    // ==========================================
-    // [추천/비추천] 등록 및 취소
-    // ==========================================
+
+    // 추천/비추천 등록 및 취소
 
     // 1. 내 반응 조회 (취소 전 확인용)
     String selectReactionType(@Param("boardId") Long boardId, @Param("userId") Long userId);

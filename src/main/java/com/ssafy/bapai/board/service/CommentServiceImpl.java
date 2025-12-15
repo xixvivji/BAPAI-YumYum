@@ -16,28 +16,27 @@ public class CommentServiceImpl implements CommentService {
 
     private final CommentDao commentDao;
 
-    // 1. 댓글 목록 조회 (대댓글 계층 구조 조립)
+    // 1. 댓글 목록 조회
     @Override
     public List<CommentDto> getComments(Long boardId, Long userId) {
-        // (1) DB에서 해당 게시글의 모든 댓글을 가져옴 (평면 리스트)
+        // DB에서 해당 게시글의 모든 댓글을 가져옴
         List<CommentDto> allComments = commentDao.selectCommentsByBoardId(boardId, userId);
 
-        // (2) 결과로 반환할 최상위(부모) 댓글 리스트
+        // 결과로 반환할 최상위(부모) 댓글 리스트
         List<CommentDto> rootComments = new ArrayList<>();
 
-        // (3) ID로 댓글을 빠르게 찾기 위해 Map에 담기
+        // ID로 댓글을 빠르게 찾기 위해 Map에 담기
         Map<Long, CommentDto> commentMap = new HashMap<>();
         for (CommentDto c : allComments) {
             commentMap.put(c.getCommentId(), c);
         }
 
-        // (4) 부모-자식 연결 로직 (핵심!)
         for (CommentDto c : allComments) {
             if (c.getParentId() == null) {
                 // 부모가 없으면 -> 최상위 댓글 목록에 추가
                 rootComments.add(c);
             } else {
-                // 부모가 있으면 -> 부모를 찾아서 그 자식 리스트(children)에 추가
+                // 부모가 있으면 -> 부모를 찾아서 그 자식에 추가
                 CommentDto parent = commentMap.get(c.getParentId());
                 if (parent != null) {
                     parent.getChildren().add(c);
@@ -91,7 +90,7 @@ public class CommentServiceImpl implements CommentService {
         }
     }
 
-    // 6. 댓글 추천/비추천 취소 (Logic: 조회 -> 삭제 -> 감소)
+    // 6. 댓글 추천/비추천 취소 (조회 -> 삭제 -> 감소)
     @Override
     @Transactional
     public void deleteReaction(Long commentId, Long userId) {
@@ -111,7 +110,7 @@ public class CommentServiceImpl implements CommentService {
         commentDao.decreaseCommentReactionCount(commentId, type);
     }
 
-    // [Helper] 본인 확인 메서드
+    // 본인 확인 메서드
     private void checkOwner(Long commentId, Long userId) {
         CommentDto comment = commentDao.selectCommentById(commentId);
         if (comment == null) {
