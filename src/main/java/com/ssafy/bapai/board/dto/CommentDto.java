@@ -22,10 +22,10 @@ public class CommentDto {
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime createdAt;
 
-    // 수정일 (추가됨)
+    // 수정일 추가
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime updatedAt;
 
-    // 대댓글 리스트 (계층 구조용)
+    // 대댓글 리스트
     private List<CommentDto> children = new ArrayList<>();
 }

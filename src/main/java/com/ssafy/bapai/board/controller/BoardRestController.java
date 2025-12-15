@@ -47,7 +47,7 @@ public class BoardRestController {
     private final JwtUtil jwtUtil;
     private final String UPLOAD_DIR = System.getProperty("user.dir") + "/uploads/";
 
-    // 1. 게시글 목록 조회
+    // 게시글 목록 조회
     @Operation(summary = "게시글 목록 조회", description = "로그인 시 userLiked(본인 반응) 포함")
     @GetMapping
     public ResponseEntity<PageResponse<BoardDto>> getList(
@@ -57,7 +57,7 @@ public class BoardRestController {
             @RequestParam(required = false) String key,
             @RequestParam(required = false) String word,
 
-            // ★ [추가] 토큰 받기 (비회원도 가능하니 required=false)
+            // 토큰 받기 (비회원도 가능하니 required=false)
             @Parameter(hidden = true)
             @RequestHeader(value = "Authorization", required = false) String token) {
 
@@ -68,13 +68,13 @@ public class BoardRestController {
                 boardService.getBoardList(page, size, category, key, word, userId));
     }
 
-    // 2. 게시글 상세 조회
+    //  게시글 상세 조회
     @Operation(summary = "게시글 상세 조회", description = "로그인 시 userLiked 포함")
     @GetMapping("/{boardId}")
     public ResponseEntity<BoardDto> getDetail(
             @PathVariable Long boardId,
 
-            // ★ [추가] 토큰 받기
+            // 토큰 받기
             @Parameter(hidden = true)
             @RequestHeader(value = "Authorization", required = false) String token) {
 
@@ -83,7 +83,7 @@ public class BoardRestController {
         return ResponseEntity.ok(boardService.getBoardDetail(boardId, userId));
     }
 
-    // [Helper] 토큰이 있으면 ID 반환, 없거나 에러면 null 반환
+    // 토큰이 있으면 ID 반환, 없거나 에러면 null 반환
     private Long getUserIdIfExist(String token) {
         if (token != null && token.startsWith("Bearer ")) {
             try {
@@ -95,28 +95,25 @@ public class BoardRestController {
         return null;
     }
 
-    // =====================================================================
-    // 3. 글 작성 (멀티모달: 폼 데이터)
-    // =====================================================================
+
+    // 글 작성 (멀티모달: 폼 데이터)
+
     @Operation(summary = "게시글 작성", description = "제목, 내용, 카테고리, 이미지를 전송합니다.")
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> write(
             @Parameter(hidden = true) @RequestHeader("Authorization") String token,
 
-            // 1. @ModelAttribute 사용 (category, title, content를 알아서 받음)
-            // ★ 프론트엔드에서 board라는 덩어리 없이 그냥 보내면 됩니다.
+            // @ModelAttribute 사용
+
             @ModelAttribute BoardDto boardDto,
 
-            // 2. 파일 이름 맞추기 (프론트가 'image'로 보낸다면 여기서도 'image'여야 함!)
-            // ★ 만약 프론트가 'file'로 보낸다면 @RequestPart("file")로 유지하세요.
             @Parameter(description = "업로드할 이미지 파일")
             @RequestPart(value = "image", required = false) MultipartFile file) {
 
-        // --- [디버깅 로그] ---
+        //  로그
         System.out.println("1. 제목: " + boardDto.getTitle());
         System.out.println("2. 내용: " + boardDto.getContent());
         System.out.println("3. 파일: " + file);
-        // -------------------
 
         Long userId = getUserIdFromToken(token);
         boardDto.setUserId(userId);
@@ -130,9 +127,9 @@ public class BoardRestController {
         return ResponseEntity.ok(Map.of("message", "게시글이 등록되었습니다."));
     }
 
-    // =====================================================================
-    // 4. 글 수정 (멀티모달: 폼 데이터)
-    // =====================================================================
+
+    // 글 수정 (멀티모달: 폼 데이터)
+
     @Operation(summary = "게시글 수정", description = "수정할 내용(제목, 내용, 카테고리)과 새 이미지 파일을 전송합니다.")
     @PutMapping(value = "/{boardId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> update(
@@ -141,21 +138,19 @@ public class BoardRestController {
             @Parameter(description = "수정할 게시글 ID", example = "1")
             @PathVariable Long boardId,
 
-            // 1. @ModelAttribute 사용 (title, content, category 자동 매핑)
-            // ★ 작성(write) 때와 똑같이 맞춤!
+
             @ModelAttribute BoardDto boardDto,
 
-            // 2. 파일 받기 (프론트가 'image'로 보내므로 여기서도 'image')
             @Parameter(description = "새로운 이미지 파일 (선택사항: 안 보내면 기존 이미지 유지)")
             @RequestPart(value = "image", required = false) MultipartFile file) {
 
-        // --- [디버깅 로그] ---
+        // 로그
         System.out.println("=== UPDATE 요청 도착 ===");
         System.out.println("1. 수정할 ID: " + boardId);
         System.out.println("2. 제목: " + boardDto.getTitle());
         System.out.println("3. 내용: " + boardDto.getContent());
         System.out.println("4. 파일: " + file);
-        // -------------------
+
 
         Long userId = getUserIdFromToken(token);
 
@@ -177,7 +172,7 @@ public class BoardRestController {
         }
     }
 
-    // 5. 글 삭제
+    // 글 삭제
     @Operation(summary = "게시글 삭제", description = "게시글을 삭제합니다.")
     @DeleteMapping("/{boardId}")
     public ResponseEntity<?> delete(
@@ -202,7 +197,7 @@ public class BoardRestController {
                     content = @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = ReactionRequestDto.class),
-                            examples = @ExampleObject(value = "{\"type\": \"LIKE\"}") // ★ 여기가 핵심! 미리보기 제공
+                            examples = @ExampleObject(value = "{\"type\": \"LIKE\"}")
                     )
             ))
     @PostMapping("/{boardId}/reaction")
@@ -242,9 +237,8 @@ public class BoardRestController {
         }
     }
 
-    // ==========================================
-    // 8. 댓글 목록 조회
-    // ==========================================
+
+    // 댓글 목록 조회
     @Operation(summary = "댓글 목록 조회", description = "로그인한 경우, 본인이 누른 추천/비추천 여부(userLiked)가 포함됩니다.")
     @GetMapping("/{boardId}/comments")
     public ResponseEntity<?> getComments(
@@ -267,9 +261,8 @@ public class BoardRestController {
         return ResponseEntity.ok(commentService.getComments(boardId, userId));
     }
 
-    // ==========================================
-    // [Helper] 메서드들
-    // ==========================================
+
+    // Helper 메서드들
     // ... (uploadFile, getUserIdFromToken 등 기존 로직 동일) ...
     private String uploadFile(MultipartFile file) {
         try {

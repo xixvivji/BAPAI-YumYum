@@ -33,12 +33,12 @@ public class CommentRestController {
     private final CommentService commentService;
     private final JwtUtil jwtUtil;
 
-    // 1. 특정 게시글의 댓글 목록 조회
+    // 특정 게시글의 댓글 목록 조회
     @Operation(summary = "댓글 목록 조회", description = "로그인한 경우 본인의 추천 여부(userReaction)도 함께 반환됩니다.")
     @GetMapping("/board/{boardId}")
     public ResponseEntity<List<CommentDto>> getComments(
             @PathVariable Long boardId,
-            // ★ 토큰은 있을 수도 있고 없을 수도 있음 (required = false)
+            // 토큰은 있을 수도 있고 없을 수도 (required = false)
             @Parameter(hidden = true) @RequestHeader(value = "Authorization", required = false)
             String token) {
 
@@ -49,7 +49,7 @@ public class CommentRestController {
             try {
                 userId = jwtUtil.getUserId(token.substring(7));
             } catch (Exception e) {
-                // 토큰이 만료되었거나 이상하면 그냥 비회원(null) 취급
+                // 토큰이 만료되었거나 이상하면 그냥 비회원 취급
                 userId = null;
             }
         }
@@ -57,7 +57,7 @@ public class CommentRestController {
         return ResponseEntity.ok(commentService.getComments(boardId, userId));
     }
 
-    // 2. 댓글 작성
+    // 댓글 작성
     @Operation(summary = "댓글 작성", description = "게시글에 댓글을 답니다. parentId가 있으면 대댓글이 됩니다.")
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "작성할 댓글 정보", required = true,
@@ -77,9 +77,9 @@ public class CommentRestController {
         return ResponseEntity.ok(Map.of("message", "댓글이 등록되었습니다."));
     }
 
-    // =========================================================
-    // ★ 3. 댓글 수정 (추가됨)
-    // =========================================================
+
+    // 댓글 수정 추가
+
     @Operation(summary = "댓글 수정", description = "내 댓글 내용을 수정합니다.")
     @PutMapping("/{commentId}")
     public ResponseEntity<?> update(
@@ -99,9 +99,8 @@ public class CommentRestController {
         }
     }
 
-    // =========================================================
-    // ★ 4. 댓글 삭제 (추가됨)
-    // =========================================================
+
+    //  댓글 삭제 추가
     @Operation(summary = "댓글 삭제", description = "내 댓글을 삭제합니다.")
     @DeleteMapping("/{commentId}")
     public ResponseEntity<?> delete(
@@ -117,9 +116,9 @@ public class CommentRestController {
         }
     }
 
-    // =========================================================
-    // ★ 5. 댓글 추천/비추천 등록 (Body 방식으로 변경됨)
-    // =========================================================
+
+    //  댓글 추천/비추천 등록 Body 방식
+
     @Operation(summary = "댓글 추천/비추천 등록", description = "Body에 { \"type\": \"LIKE\" } 형태로 전송")
     @PostMapping("/{commentId}/reaction")
     public ResponseEntity<?> addReaction(
@@ -144,9 +143,8 @@ public class CommentRestController {
         }
     }
 
-    // =========================================================
-    // ★ 6. 댓글 추천/비추천 취소 (추가됨)
-    // =========================================================
+
+    // 댓글 추천/비추천 취소
     @Operation(summary = "댓글 추천/비추천 취소", description = "기존에 눌렀던 좋아요/싫어요를 취소합니다.")
     @DeleteMapping("/{commentId}/reaction")
     public ResponseEntity<?> cancelReaction(
@@ -162,7 +160,7 @@ public class CommentRestController {
         }
     }
 
-    // [Helper] 토큰 파싱
+    // Helper 토큰 파싱
     private Long getUserIdFromToken(String token) {
         if (token != null && token.startsWith("Bearer ")) {
             return jwtUtil.getUserId(token.substring(7));
@@ -170,7 +168,7 @@ public class CommentRestController {
         throw new IllegalArgumentException("유효하지 않은 토큰입니다.");
     }
 
-    // [DTO] 반응 요청용 내부 DTO
+    //요청용 내부 DTO
     @Data
     public static class ReactionRequestDto {
         private String type; // LIKE or DISLIKE

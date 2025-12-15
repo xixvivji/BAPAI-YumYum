@@ -30,7 +30,7 @@ public class BoardServiceImpl implements BoardService {
         params.put("key", key);
         params.put("word", word);
 
-        // ★ [추가] 맵에 userId 담기 (XML에서 쓸 거임)
+        // 맵에 userId 담기 XML에서 쓸 거
         params.put("userId", userId);
 
         List<BoardDto> list = boardDao.selectBoardList(params);
@@ -42,11 +42,11 @@ public class BoardServiceImpl implements BoardService {
     @Override
     public BoardDto getBoardDetail(Long boardId, Long userId) {
         boardDao.updateHit(boardId);
-        // ★ [변경] userId도 같이 넘김
+        // userId도 같이 넘김
         return boardDao.selectBoardDetail(boardId, userId);
     }
 
-   
+
     @Override
     public void writeBoard(BoardDto boardDto) {
         boardDao.insertBoard(boardDto);
@@ -61,7 +61,7 @@ public class BoardServiceImpl implements BoardService {
     @Override
     @Transactional
     public void removeBoard(Long boardId, Long userId) {
-        // 1. 본인 확인 및 게시글 정보 조회 (파일 경로 때문)
+        // 1. 본인 확인 및 게시글 정보 조회
         BoardDto board = boardDao.selectBoardDetail(boardId);
         if (board == null) {
             throw new IllegalArgumentException("게시글이 없습니다.");
@@ -77,7 +77,7 @@ public class BoardServiceImpl implements BoardService {
         // 3. 게시글 좋아요/싫어요 기록 삭제
         boardDao.deleteAllReactionsByBoardId(boardId);
 
-        // 4. 첨부 파일 삭제 (로컬 디스크)
+        // 4. 첨부 파일 삭제
         if (board.getImgUrl() != null && !board.getImgUrl().isEmpty()) {
             // /images/uuid_filename.jpg -> uuid_filename.jpg 추출
             String fileName = board.getImgUrl().replace("/images/", "");
@@ -87,7 +87,7 @@ public class BoardServiceImpl implements BoardService {
             }
         }
 
-        // 5. 대망의 게시글 삭제
+        //게시글 삭제
         boardDao.deleteBoard(boardId);
     }
 
