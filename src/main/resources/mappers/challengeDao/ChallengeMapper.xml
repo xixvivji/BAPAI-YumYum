@@ -81,5 +81,9 @@
         </foreach>
         OR keyword = '일반'
     </select>
-
+    <select id="selectPresetById" resultType="com.ssafy.bapai.challenge.dto.ChallengePresetDto">
+        SELECT *
+        FROM challenge_preset
+        WHERE preset_id = #{presetId}
+    </select>
 </mapper>

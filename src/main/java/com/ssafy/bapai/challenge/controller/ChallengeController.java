@@ -2,6 +2,7 @@ package com.ssafy.bapai.challenge.controller;
 
 import com.ssafy.bapai.challenge.dto.ChallengeDto;
 import com.ssafy.bapai.challenge.dto.ChallengePresetDto;
+import com.ssafy.bapai.challenge.dto.ChallengeSelectRequest;
 import com.ssafy.bapai.challenge.dto.MealLogDto;
 import com.ssafy.bapai.challenge.service.ChallengeService;
 import com.ssafy.bapai.common.util.JwtUtil;
@@ -29,18 +30,18 @@ public class ChallengeController {
     private final ChallengeService challengeService;
     private final JwtUtil jwtUtil;
 
-    // --- 챌린지 관련 ---
-    // URL 변경: /teams -> /groups
-//    @PostMapping("/groups/{groupId}/challenges")
-//    @Operation(summary = "챌린지 생성", description = "goalType(COUNT), targetCount(목표횟수) 필수")
-//    public ResponseEntity<?> createChallenge(
-//            @PathVariable Long groupId,
-//            @RequestBody ChallengeDto dto) {
-//
-//        dto.setGroupId(groupId); // teamId -> groupId
-//        challengeService.createChallenge(dto);
-//        return ResponseEntity.ok("챌린지가 생성되었습니다.");
-//    }
+
+    // 1. 챌린지 관리 (생성 및 조회)
+    //  프리셋 선택하여 챌린지 생성하기 (태그 검증 포함)
+    @PostMapping("/groups/{groupId}/challenges/preset")
+    @Operation(summary = "프리셋으로 챌린지 생성", description = "그룹의 태그와 일치하거나 '일반' 챌린지만 생성 가능합니다.")
+    public ResponseEntity<?> createChallengeFromPreset(
+            @PathVariable Long groupId,
+            @RequestBody ChallengeSelectRequest request) {
+
+        challengeService.createChallengeFromPreset(groupId, request);
+        return ResponseEntity.ok("챌린지가 등록되었습니다.");
+    }
 
     @GetMapping("/groups/{groupId}/challenges")
     @Operation(summary = "챌린지 목록 조회")
@@ -59,7 +60,9 @@ public class ChallengeController {
         return ResponseEntity.ok("참여 완료!");
     }
 
-    // 식단 인증 관련
+
+    // 2. 식단 인증 (Meal Log)
+
     @PostMapping("/meals")
     @Operation(summary = "식단 기록 (챌린지 인증 포함)", description = "challengeId가 있으면 챌린지 카운트 반영")
     public ResponseEntity<?> recordMeal(
@@ -74,23 +77,22 @@ public class ChallengeController {
         return ResponseEntity.ok("식단이 기록되고 점수가 반영되었습니다.");
     }
 
+
+    // 3. 챌린지 추천 (DB & AI)
+
     @GetMapping("/challenges/recommend/presets")
     @Operation(summary = "추천 챌린지 (DB 프리셋)", description = "서버에 저장된 기본 추천 목록을 빠르게 반환합니다.")
     public ResponseEntity<List<ChallengePresetDto>> getPresets(
             @Parameter(description = "관심 키워드 (예: 다이어트, 근력)", required = false)
             @RequestParam(required = false) List<String> keywords) {
-
-        // 1. DB에서 빠르게 조회
         return ResponseEntity.ok(challengeService.getRecommendChallenges(keywords));
     }
 
     @GetMapping("/challenges/recommend/ai")
-    @Operation(summary = "추천 챌린지 (AI 생성)", description = "Gemini AI가 키워드를 분석하여 새로운 챌린지를 제안합니다. (3~5초 소요)")
+    @Operation(summary = "추천 챌린지 (AI 생성)", description = "Gemini AI가 키워드를 분석하여 새로운 챌린지를 제안합니다.")
     public ResponseEntity<List<ChallengePresetDto>> getAiSuggestions(
             @Parameter(description = "관심 키워드 (예: 다이어트, 근력)", required = false)
             @RequestParam(required = false) List<String> keywords) {
-
-        // 2. AI가 실시간 생성
         return ResponseEntity.ok(challengeService.getAiChallenges(keywords));
     }
 }
