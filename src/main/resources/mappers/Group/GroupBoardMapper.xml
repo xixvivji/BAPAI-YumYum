@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.ssafy.bapai.group.dao.GroupBoardDao">
+
+    <insert id="insertBoard">
+        INSERT INTO group_board (group_id, user_id, type, title, content, created_at)
+        VALUES (#{groupId}, #{userId}, #{type}, #{title}, #{content}, NOW())
+    </insert>
+
+    <select id="selectBoardList" resultType="com.ssafy.bapai.group.dto.GroupBoardDto">
+        SELECT gb.board_id,
+               gb.group_id,
+               gb.user_id,
+               gb.type,
+               gb.title,
+               gb.content,
+               gb.created_at,
+               m.nickname AS writerNickname
+        FROM group_board gb
+                 JOIN member m ON gb.user_id = m.user_id
+        WHERE gb.group_id = #{groupId}
+        ORDER BY CASE WHEN gb.type = 'NOTICE' THEN 1 ELSE 2 END ASC, gb.created_at DESC
+    </select>
+
+    <select id="selectBoardDetail" resultType="com.ssafy.bapai.group.dto.GroupBoardDto">
+        SELECT gb.board_id,
+               gb.group_id,
+               gb.user_id,
+               gb.type,
+               gb.title,
+               gb.content,
+               gb.created_at,
+               m.nickname AS writerNickname
+        FROM group_board gb
+                 JOIN member m ON gb.user_id = m.user_id
+        WHERE gb.board_id = #{boardId}
+    </select>
+
+    <delete id="deleteBoard">
+        DELETE
+        FROM group_board
+        WHERE board_id = #{boardId}
+    </delete>
+</mapper>

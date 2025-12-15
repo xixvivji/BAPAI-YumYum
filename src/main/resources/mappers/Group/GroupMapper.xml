@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.ssafy.bapai.group.dao.GroupDao">
+
+    <insert id="insertGroup" useGeneratedKeys="true" keyProperty="groupId">
+        INSERT INTO groups (owner_id, name, description, img_url, max_count, type, created_at)
+        VALUES (#{ownerId}, #{name}, #{description}, #{imgUrl}, #{maxCount}, #{type}, NOW())
+    </insert>
+
+    <insert id="insertGroupMember">
+        INSERT INTO group_member (group_id, user_id, role, joined_at)
+        VALUES (#{groupId}, #{userId}, #{role}, NOW())
+    </insert>
+
+    <select id="selectGroupList" resultType="com.ssafy.bapai.group.dto.GroupDto">
+        SELECT t.group_id, t.owner_id, t.name, t.description, t.img_url, t.max_count, t.type, t.created_at,
+        m.nickname AS ownerName,
+        (SELECT COUNT(*) FROM group_member gm WHERE gm.group_id = t.group_id) AS memberCount
+        FROM groups t
+        JOIN member m ON t.owner_id = m.user_id
+        WHERE 1=1
+        <if test="keyword != null and keyword != ''">
+            AND (
+            t.name LIKE CONCAT('%', #{keyword}, '%')
+            OR EXISTS (
+            SELECT 1
+            FROM group_hashtags gh
+            JOIN hashtags h ON gh.tag_id = h.hashtag_id
+            WHERE gh.group_id = t.group_id
+            AND h.name LIKE CONCAT('%', #{keyword}, '%')
+            )
+            )
+        </if>
+        ORDER BY t.created_at DESC
+    </select>
+
+    <select id="selectGroupDetail" resultType="com.ssafy.bapai.group.dto.GroupDto">
+        SELECT t.group_id,
+               t.owner_id,
+               t.name,
+               t.description,
+               t.img_url,
+               t.max_count,
+               t.type,
+               t.created_at,
+               m.nickname                                                            AS ownerName,
+               (SELECT COUNT(*) FROM group_member gm WHERE gm.group_id = t.group_id) AS memberCount
+        FROM groups t
+                 JOIN member m ON t.owner_id = m.user_id
+        WHERE t.group_id = #{groupId}
+    </select>
+
+    <delete id="deleteGroupMember">
+        DELETE
+        FROM group_member
+        WHERE group_id = #{groupId}
+          AND user_id = #{userId}
+    </delete>
+
+    <select id="checkJoined" resultType="int">
+        SELECT COUNT(*)
+        FROM group_member
+        WHERE group_id = #{groupId}
+          AND user_id = #{userId}
+    </select>
+
+    <select id="countMembers" resultType="int">
+        SELECT COUNT(*)
+        FROM group_member
+        WHERE group_id = #{groupId}
+    </select>
+
+    <select id="selectMyRole" resultType="string">
+        SELECT role
+        FROM group_member
+        WHERE group_id = #{groupId}
+          AND user_id = #{userId}
+    </select>
+
+    <update id="updateGroupOwner">
+        UPDATE groups
+        SET owner_id = #{newOwnerId}
+        WHERE group_id = #{groupId}
+    </update>
+
+    <update id="updateMemberRole">
+        UPDATE group_member
+        SET role = #{role}
+        WHERE group_id = #{groupId}
+          AND user_id = #{userId}
+    </update>
+
+    <select id="selectGroupRanking" resultType="com.ssafy.bapai.group.dto.GroupRankDto">
+        SELECT m.user_id,
+               m.nickname,
+               IFNULL(SUM(r.score), 0) as totalScore,
+               COUNT(r.report_id)      as reportCount
+        FROM group_member gm
+                 JOIN member m ON gm.user_id = m.user_id
+                 LEFT JOIN report r ON m.user_id = r.user_id
+        WHERE gm.group_id = #{groupId}
+        GROUP BY m.user_id
+        ORDER BY totalScore DESC
+        LIMIT #{limit}
+    </select>
+
+    <insert id="insertGroupHashtag">
+        INSERT INTO group_hashtags (group_id, tag_id)
+        VALUES (#{groupId}, #{tagId})
+    </insert>
+
+    <select id="selectGroupTags" resultType="string">
+        SELECT h.name
+        FROM group_hashtags gh
+                 JOIN hashtags h ON gh.tag_id = h.hashtag_id
+        WHERE gh.group_id = #{groupId}
+    </select>
+
+    <select id="selectTagIdByName" resultType="long">
+        SELECT hashtag_id
+        FROM hashtags
+        WHERE name = #{tagName}
+    </select>
+
+</mapper>
