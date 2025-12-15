@@ -23,10 +23,10 @@
         WHERE ml.user_id IN (
             SELECT sub.user_id
             FROM (SELECT m.user_id
-                  FROM team_member tm
-                           JOIN member m ON tm.user_id = m.user_id
+                  FROM group_member gm
+                           JOIN member m ON gm.user_id = m.user_id
                            LEFT JOIN meal_log l ON m.user_id = l.user_id
-                  WHERE tm.team_id = #{teamId}
+                  WHERE gm.group_id = #{groupId}
                     AND l.created_at BETWEEN #{startDate} AND #{endDate}
                   GROUP BY m.user_id
                   ORDER BY AVG(l.score) DESC

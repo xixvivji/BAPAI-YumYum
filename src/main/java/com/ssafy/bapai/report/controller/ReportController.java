@@ -24,17 +24,19 @@ public class ReportController {
     private final ReportService reportService;
     private final JwtUtil jwtUtil;
 
-    @GetMapping("/gap/{teamId}")
+    // URL path: /gap/{teamId} -> /gap/{groupId}
+    @GetMapping("/gap/{groupId}")
     @Operation(summary = "비교 분석 리포트 조회",
             description = "나의 식단 vs 목표 vs 랭커(상위권)를 비교 분석합니다. type='WEEKLY' or 'MONTHLY'")
     public ResponseEntity<GapReportDto> getGapReport(
-            @PathVariable Long teamId,
+            @PathVariable Long groupId,
             @Parameter(description = "조회 기간 (WEEKLY, MONTHLY)", example = "WEEKLY")
             @RequestParam(defaultValue = "WEEKLY") String type,
             @RequestHeader("Authorization") String token) {
 
         Long userId = jwtUtil.getUserId(token.substring(7));
 
-        return ResponseEntity.ok(reportService.analyzeGap(userId, teamId, type));
+        // teamId -> groupId
+        return ResponseEntity.ok(reportService.analyzeGap(userId, groupId, type));
     }
 }
