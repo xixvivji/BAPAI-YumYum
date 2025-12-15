@@ -4,47 +4,78 @@
 
 <mapper namespace="com.ssafy.bapai.diet.dao.DietDao">
 
+    <resultMap id="DietResultMap" type="com.ssafy.bapai.diet.dto.DietDto">
+        <id property="dietId" column="diet_id"/>
+        <result property="userId" column="user_id"/>
+        <result property="eatDate" column="eat_date"/>
+        <result property="mealType" column="meal_type"/>
+        <result property="dietImg" column="diet_img"/>
+        <result property="memo" column="memo"/>
+        <result property="totalKcal" column="total_kcal"/>
+        <result property="score" column="score"/>
+        <result property="aiAnalysis" column="ai_analysis"/>
+
+        <collection property="foodList" ofType="com.ssafy.bapai.diet.dto.DietDetailDto">
+            <id property="detailId" column="detail_id"/>
+            <result property="dietId" column="diet_id"/>
+            <result property="foodCode" column="food_code"/>
+            <result property="foodName" column="food_name"/>
+            <result property="amount" column="amount"/>
+            <result property="kcal" column="kcal"/>
+        </collection>
+    </resultMap>
+
     <insert id="insertDiet" useGeneratedKeys="true" keyProperty="dietId"
             parameterType="com.ssafy.bapai.diet.dto.DietDto">
         INSERT INTO diet (user_id, eat_date, meal_type, diet_img, memo, total_kcal, score, ai_analysis)
         VALUES (#{userId}, #{eatDate}, #{mealType}, #{dietImg}, #{memo}, #{totalKcal}, #{score}, #{aiAnalysis})
     </insert>
 
-    <select id="selectDailyDiets" resultType="com.ssafy.bapai.diet.dto.DietDto">
-        SELECT *
-        FROM diet
-        WHERE user_id = #{userId}
-          AND eat_date = #{date}
-        ORDER BY meal_type ASC
+    <insert id="insertDietDetail" parameterType="com.ssafy.bapai.diet.dto.DietDetailDto">
+        INSERT INTO diet_detail (diet_id, food_code, food_name, amount, kcal)
+        VALUES (#{dietId}, #{foodCode}, #{foodName}, #{amount}, #{kcal})
+    </insert>
+
+    <select id="selectDailyDiets" resultMap="DietResultMap">
+        SELECT d.*, dd.*
+        FROM diet d
+                 LEFT JOIN diet_detail dd ON d.diet_id = dd.diet_id
+        WHERE d.user_id = #{userId}
+          AND d.eat_date = #{date}
+        ORDER BY d.meal_type ASC
     </select>
 
-    <select id="selectWeeklyDiets" resultType="com.ssafy.bapai.diet.dto.DietDto">
-        SELECT *
-        FROM diet
-        WHERE user_id = #{userId}
-          AND eat_date BETWEEN #{startDate} AND #{endDate}
-        ORDER BY eat_date ASC, meal_type ASC
+    <select id="selectWeeklyDiets" resultMap="DietResultMap">
+        SELECT d.*, dd.*
+        FROM diet d
+                 LEFT JOIN diet_detail dd ON d.diet_id = dd.diet_id
+        WHERE d.user_id = #{userId}
+          AND d.eat_date BETWEEN #{startDate} AND #{endDate}
+        ORDER BY d.eat_date ASC, d.meal_type ASC
     </select>
 
-    <select id="selectMonthlyDiets" resultType="com.ssafy.bapai.diet.dto.DietDto">
-        SELECT *
-        FROM diet
-        WHERE user_id = #{userId}
-          AND eat_date LIKE CONCAT(#{month}, '%')
-        ORDER BY eat_date DESC
+    <select id="selectMonthlyDiets" resultMap="DietResultMap">
+        SELECT d.*, dd.*
+        FROM diet d
+                 LEFT JOIN diet_detail dd ON d.diet_id = dd.diet_id
+        WHERE d.user_id = #{userId}
+          AND d.eat_date LIKE CONCAT(#{month}, '%')
+        ORDER BY d.eat_date DESC
     </select>
 
-    <select id="selectAllDiets" resultType="com.ssafy.bapai.diet.dto.DietDto">
-        SELECT *
-        FROM diet
-        WHERE user_id = #{userId}
-        ORDER BY eat_date DESC
+    <select id="selectAllDiets" resultMap="DietResultMap">
+        SELECT d.*, dd.*
+        FROM diet d
+                 LEFT JOIN diet_detail dd ON d.diet_id = dd.diet_id
+        WHERE d.user_id = #{userId}
+        ORDER BY d.eat_date DESC
     </select>
 
-    <select id="selectDietDetail" resultType="com.ssafy.bapai.diet.dto.DietDto">
-        SELECT *
-        FROM diet
-        WHERE diet_id = #{dietId}
+    <select id="selectDietDetail" resultMap="DietResultMap">
+        SELECT d.*, dd.*
+        FROM diet d
+                 LEFT JOIN diet_detail dd ON d.diet_id = dd.diet_id
+        WHERE d.diet_id = #{dietId}
     </select>
 
     <update id="updateDiet">
@@ -58,6 +89,12 @@
     <delete id="deleteDiet">
         DELETE
         FROM diet
+        WHERE diet_id = #{dietId}
+    </delete>
+
+    <delete id="deleteDietDetailsByDietId">
+        DELETE
+        FROM diet_detail
         WHERE diet_id = #{dietId}
     </delete>
 

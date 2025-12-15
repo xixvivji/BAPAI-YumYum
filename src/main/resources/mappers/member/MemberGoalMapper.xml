@@ -32,7 +32,17 @@
     </select>
 
     <select id="selectGoalByUserId" resultType="com.ssafy.bapai.member.dto.MemberGoalDto">
-        SELECT *
+        SELECT goal_id        AS goalId,
+               user_id        AS userId,
+               activity_level AS activityLevel,
+               diet_goal      AS dietGoal,
+               bmr,
+               tdee,
+               rec_calories   AS recCalories,
+               rec_carbs      AS recCarbs,
+               rec_protein    AS recProtein,
+               rec_fat        AS recFat,
+               updated_at     AS updatedAt
         FROM member_goal
         WHERE user_id = #{userId}
     </select>

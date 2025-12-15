@@ -4,8 +4,28 @@
 
 <mapper namespace="com.ssafy.bapai.food.dao.FoodDao">
 
+    <sql id="foodColumns">
+        food_code       AS foodCode,
+        data_source     AS dataSource,
+        name,
+        maker,
+        category,
+        serving_size    AS servingSize,
+        unit,
+        kcal,
+        carbo,
+        protein,
+        fat,
+        sugar,
+        sodium,
+        cholesterol,
+        saturated_fat   AS saturatedFat,
+        trans_fat       AS transFat
+    </sql>
+
     <select id="searchList" parameterType="string" resultType="com.ssafy.bapai.food.dto.FoodDto">
-        SELECT *
+        SELECT
+        <include refid="foodColumns"/>
         FROM food
         WHERE name LIKE CONCAT('%', #{keyword}, '%')
         ORDER BY name ASC
@@ -13,7 +33,8 @@
     </select>
 
     <select id="selectFood" parameterType="string" resultType="com.ssafy.bapai.food.dto.FoodDto">
-        SELECT *
+        SELECT
+        <include refid="foodColumns"/>
         FROM food
         WHERE food_code = #{foodCode}
     </select>

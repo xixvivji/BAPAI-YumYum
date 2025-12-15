@@ -11,7 +11,12 @@
 
     <select id="findRecentByEmail" parameterType="string"
             resultType="com.ssafy.bapai.member.dto.EmailAuthDto">
-        SELECT *
+        SELECT auth_id     AS authId,
+               email,
+               auth_code   AS authCode,
+               expired_at  AS expiredAt,
+               is_verified AS isVerified,
+               created_at  AS createdAt
         FROM email_auth
         WHERE email = #{email}
         ORDER BY created_at DESC

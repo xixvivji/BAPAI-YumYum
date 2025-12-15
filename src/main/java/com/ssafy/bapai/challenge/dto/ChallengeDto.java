@@ -8,7 +8,9 @@ import lombok.Data;
 @Schema(description = "챌린지 정보")
 public class ChallengeDto {
     private Long challengeId;
-    private Long teamId;
+
+    @Schema(description = "모임 ID (FK)")
+    private Long groupId;
 
     @Schema(description = "챌린지 제목")
     private String title;
