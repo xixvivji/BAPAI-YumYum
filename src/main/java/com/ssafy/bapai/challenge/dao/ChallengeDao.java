@@ -32,4 +32,6 @@ public interface ChallengeDao {
 
     // 5. 프리셋 (추천)
     List<ChallengePresetDto> selectPresetsByKeywords(@Param("keywords") List<String> keywords);
+
+    ChallengePresetDto selectPresetById(Long presetId);
 }
