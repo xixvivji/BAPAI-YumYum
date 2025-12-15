@@ -3,7 +3,6 @@ package com.ssafy.bapai.challenge.dao;
 import com.ssafy.bapai.challenge.dto.ChallengeDto;
 import com.ssafy.bapai.challenge.dto.ChallengePresetDto;
 import com.ssafy.bapai.challenge.dto.MealLogDto;
-import com.ssafy.bapai.report.dto.ReportLogDto;
 import java.util.List;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -30,9 +29,6 @@ public interface ChallengeDao {
 
     // 3. 식단 기록
     void insertMealLog(MealLogDto dto);
-
-    // 4. 리포트 로그
-    void insertReportLog(ReportLogDto dto);
 
     // 5. 프리셋 (추천)
     List<ChallengePresetDto> selectPresetsByKeywords(@Param("keywords") List<String> keywords);

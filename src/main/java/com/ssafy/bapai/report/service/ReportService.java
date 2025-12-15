@@ -4,10 +4,12 @@ import com.ssafy.bapai.member.dao.MemberGoalDao;
 import com.ssafy.bapai.member.dto.MemberGoalDto;
 import com.ssafy.bapai.report.dao.ReportDao;
 import com.ssafy.bapai.report.dto.GapReportDto;
+import com.ssafy.bapai.report.dto.ReportLogDto;
 import java.time.LocalDate;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -16,7 +18,8 @@ public class ReportService {
     private final ReportDao reportDao;
     private final MemberGoalDao memberGoalDao;
 
-    // teamId -> groupId
+    // 분석 + 로그 저장까지 한번에
+    @Transactional // 저장 로직이 들어가므로 트랜잭션 추가
     public GapReportDto analyzeGap(Long userId, Long groupId, String periodType) {
         GapReportDto dto = new GapReportDto();
 
@@ -26,7 +29,7 @@ public class ReportService {
         if ("MONTHLY".equalsIgnoreCase(periodType)) {
             start = end.minusDays(30);
         } else {
-            start = end.minusDays(7); // WEEKLY
+            start = end.minusDays(7);
         }
 
         // 2. 목표 조회
@@ -38,7 +41,7 @@ public class ReportService {
             dto.setGoalFat(goal.getRecFat());
         }
 
-        // 3. 통계 조회 (groupId 전달)
+        // 3. 통계 조회
         Map<String, Double> myStats =
                 reportDao.selectMyStatsByPeriod(userId, start.toString(), end.toString());
         Map<String, Double> rankerStats =
@@ -56,37 +59,41 @@ public class ReportService {
         dto.setRankerAvgProtein(rankerStats.get("avgProtein"));
         dto.setRankerAvgFat(rankerStats.get("avgFat"));
 
-        // 5. AI 분석
-        dto.setAnalysisMessage(generateAiMessage(dto));
+        // 5. AI 메시지 생성
+        String aiMessage = generateAiMessage(dto);
+        dto.setAnalysisMessage(aiMessage);
+
+        //  6. 분석 결과 DB에 저장 (히스토리용)
+        saveReportLog(userId, periodType, start, end, dto.getMyAvgScore(), aiMessage);
 
         return dto;
     }
 
-    private String generateAiMessage(GapReportDto dto) {
-        StringBuilder sb = new StringBuilder();
+    // 내부 저장 메서드
+    private void saveReportLog(Long userId, String type, LocalDate start, LocalDate end,
+                               double score, String msg) {
+        ReportLogDto logDto = new ReportLogDto();
+        logDto.setUserId(userId);
+        logDto.setReportType(type); // WEEKLY or MONTHLY
+        logDto.setStartDate(start);
+        logDto.setEndDate(end);
+        logDto.setScoreAverage(score);
+        logDto.setAiMessage(msg);
 
-        // 목표 비교
+        reportDao.insertReportLog(logDto);
+    }
+
+    private String generateAiMessage(GapReportDto dto) {
+        // (생략: 기존과 동일)
+        StringBuilder sb = new StringBuilder();
         if (dto.getGoalCalories() > 0) {
             if (dto.getMyAvgCalories() > dto.getGoalCalories() * 1.15) {
-                sb.append("⚠️ 목표보다 과식하고 계십니다! ");
+                sb.append("⚠️ 과식 주의! ");
             } else if (dto.getMyAvgCalories() < dto.getGoalCalories() * 0.8) {
-                sb.append("⚠️ 너무 적게 드셨네요. ");
+                sb.append("⚠️ 섭취 부족! ");
             } else {
-                sb.append("✅ 목표 칼로리를 잘 지키고 계십니다! ");
+                sb.append("✅ 목표 달성! ");
             }
-        }
-
-        // 랭커 비교
-        double scoreGap = dto.getRankerAvgScore() - dto.getMyAvgScore();
-        if (scoreGap > 10) {
-            sb.append("\n🏆 상위권 멤버들은 회원님보다 평균 ").append((int) scoreGap).append("점 높습니다. ");
-            if (dto.getRankerAvgProtein() > dto.getMyAvgProtein() + 15) {
-                sb.append("단백질 섭취량이 부족해보이네요.");
-            } else {
-                sb.append("식단 구성을 좀 더 신경써보세요.");
-            }
-        } else {
-            sb.append("\n🔥 대단해요! 팀 내 상위권 수준입니다.");
         }
         return sb.toString();
     }

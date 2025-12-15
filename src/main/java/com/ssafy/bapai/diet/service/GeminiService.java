@@ -160,4 +160,58 @@ public class GeminiService {
             return "{\"recommendedMenus\": [\"샐러드\", \"비빔밥\"], \"reason\": \"AI 분석 중 오류가 발생하여 기본 메뉴를 추천합니다.\"}";
         }
     }
+
+
+    // 키워드로 챌린지 추천 받기 (Raw JSON String 반환)
+    public String recommendChallengesByAI(List<String> keywords) {
+        try {
+            String keywordStr = (keywords == null || keywords.isEmpty()) ? "건강, 식습관, 운동" :
+                    String.join(", ", keywords);
+
+            // 프롬프트 엔지니어링: 응답 형식을 DTO 필드명과 정확히 일치시켜야 파싱이 쉽습니다.
+            String prompt = """
+                    사용자 관심사: [%s]
+                    
+                    위 관심사에 맞는 3명의 팀원이 함께할 수 있는 재미있는 챌린지 3개를 추천해줘.
+                    응답은 반드시 아래 JSON 배열 포맷으로만 출력해. (설명, 마크다운, 코드블럭 절대 금지)
+                    
+                    [
+                        {
+                            "title": "챌린지 제목 (이모지 포함)",
+                            "content": "구체적인 인증 방법 설명",
+                            "goalType": "COUNT",
+                            "targetCount": 5,
+                            "keyword": "관련키워드"
+                        }
+                    ]
+                    """.formatted(keywordStr);
+
+            // (이하 기존 analyzeImage 메서드와 동일한 방식의 호출 로직)
+            // 텍스트 전용 모델을 호출하므로 parts에 text만 넣어서 보냅니다.
+            Map<String, Object> requestBody = new HashMap<>();
+            List<Map<String, Object>> contents = new ArrayList<>();
+            Map<String, Object> content = new HashMap<>();
+            List<Map<String, Object>> parts = new ArrayList<>();
+
+            parts.add(Map.of("text", prompt));
+            content.put("parts", parts);
+            contents.add(content);
+            requestBody.put("contents", contents);
+
+            WebClient webClient = WebClient.create();
+            String response = webClient.post()
+                    .uri(apiUrl + "?key=" + apiKey)
+                    .header("Content-Type", "application/json")
+                    .bodyValue(requestBody)
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .block();
+
+            return extractJsonFromResponse(response);
+
+        } catch (Exception e) {
+            log.error("Gemini 챌린지 추천 실패", e);
+            return "[]"; // 에러 시 빈 배열 반환
+        }
+    }
 }
