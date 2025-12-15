@@ -426,4 +426,11 @@ public class MemberRestController {
         memberService.withdraw(userId);
         return ResponseEntity.ok("탈퇴 완료");
     }
+
+    @Operation(summary = "질병/알레르기 옵션 목록 조회", description = "회원가입 시 선택할 수 있는 질병과 알레르기 목록을 반환합니다.")
+    @GetMapping("/members/options")
+    public ResponseEntity<?> getHealthOptions() {
+        // { "diseases": [...], "allergies": [...] } 형태 반환
+        return ResponseEntity.ok(memberService.getHealthOptions());
+    }
 }

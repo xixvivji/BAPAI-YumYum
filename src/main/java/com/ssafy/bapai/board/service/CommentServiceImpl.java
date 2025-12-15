@@ -54,15 +54,6 @@ public class CommentServiceImpl implements CommentService {
         commentDao.insertComment(dto);
     }
 
-    @Override
-    public void deleteComment(Long commentId, Long userId) { // 파라미터 2개로 변경
-
-        // (1) 본인 확인 (내 댓글이 아니면 예외 발생)
-        checkOwner(commentId, userId);
-
-        // (2) 삭제 진행
-        commentDao.deleteComment(commentId);
-    }
 
     // 3. 댓글 수정 (본인 확인 추가)
     @Override
