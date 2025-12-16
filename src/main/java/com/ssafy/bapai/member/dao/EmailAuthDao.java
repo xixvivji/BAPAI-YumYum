@@ -13,4 +13,5 @@ public interface EmailAuthDao {
 
     // 인증 성공 처리 (is_verified = true)
     int updateVerified(Long authId);
+
 }
