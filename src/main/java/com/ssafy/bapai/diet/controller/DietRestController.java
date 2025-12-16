@@ -104,6 +104,20 @@ public class DietRestController {
         return ResponseEntity.ok(dietService.getAllDiets(userId));
     }
 
+    @GetMapping("/streak")
+    public ResponseEntity<?> getStreak(
+            @RequestHeader(value = "Authorization", required = false)
+            String token) { // required=false로 임시 변경해서 테스트
+
+
+        if (token == null) {
+            return ResponseEntity.status(401).body("토큰이 없습니다.");
+        }
+        
+        return ResponseEntity.ok("스트릭 정보 정상 응답");
+    }
+
+
     // 4. 식단 상세 조회
     @Operation(summary = "식단 상세 조회", description = "식단 ID(logId)를 통해 상세 음식 목록과 영양 정보를 조회합니다.")
     @GetMapping("/{dietId}")

@@ -36,13 +36,21 @@
         VALUES (#{dietId}, #{foodCode}, #{foodName}, #{amount}, #{kcal})
     </insert>
 
+    <insert id="insertDietDetails" parameterType="java.util.List">
+        INSERT INTO diet_detail (diet_id, food_code, food_name, amount, kcal)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.dietId}, #{item.foodCode}, #{item.foodName}, #{item.amount}, #{item.kcal})
+        </foreach>
+    </insert>
+
     <select id="selectDailyDiets" resultMap="DietResultMap">
         SELECT d.*, dd.*
         FROM diet d
                  LEFT JOIN diet_detail dd ON d.diet_id = dd.diet_id
         WHERE d.user_id = #{userId}
           AND d.eat_date = #{date}
-        ORDER BY d.meal_type ASC
+        ORDER BY FIELD(d.meal_type, 'BREAKFAST', 'LUNCH', 'DINNER', 'SNACK')
     </select>
 
     <select id="selectWeeklyDiets" resultMap="DietResultMap">
@@ -51,7 +59,7 @@
                  LEFT JOIN diet_detail dd ON d.diet_id = dd.diet_id
         WHERE d.user_id = #{userId}
           AND d.eat_date BETWEEN #{startDate} AND #{endDate}
-        ORDER BY d.eat_date ASC, d.meal_type ASC
+        ORDER BY d.eat_date ASC, FIELD(d.meal_type, 'BREAKFAST', 'LUNCH', 'DINNER', 'SNACK')
     </select>
 
     <select id="selectMonthlyDiets" resultMap="DietResultMap">
@@ -76,6 +84,14 @@
         FROM diet d
                  LEFT JOIN diet_detail dd ON d.diet_id = dd.diet_id
         WHERE d.diet_id = #{dietId}
+    </select>
+
+    <select id="selectDietDates" resultType="String">
+        SELECT DISTINCT eat_date
+        FROM diet
+        WHERE user_id = #{userId}
+        ORDER BY eat_date DESC
+        LIMIT 365
     </select>
 
     <update id="updateDiet">
