@@ -21,7 +21,7 @@ public class FoodRestController {
     private final FoodService foodService;
 
     // 1. 음식 검색 API
-    @GetMapping("/search")
+    @GetMapping
     public ResponseEntity<?> search(@RequestParam String keyword) {
         List<FoodDto> list = foodService.searchFoods(keyword);
         return ResponseEntity.ok(list);

@@ -30,9 +30,7 @@ public class ChallengeController {
     private final ChallengeService challengeService;
     private final JwtUtil jwtUtil;
 
-
     // 1. 챌린지 관리 (생성 및 조회)
-    //  프리셋 선택하여 챌린지 생성하기 (태그 검증 포함)
     @PostMapping("/groups/{groupId}/challenges/preset")
     @Operation(summary = "프리셋으로 챌린지 생성", description = "그룹의 태그와 일치하거나 '일반' 챌린지만 생성 가능합니다.")
     public ResponseEntity<?> createChallengeFromPreset(
@@ -62,7 +60,6 @@ public class ChallengeController {
 
 
     // 2. 식단 인증 (Meal Log)
-
     @PostMapping("/meals")
     @Operation(summary = "식단 기록 (챌린지 인증 포함)", description = "challengeId가 있으면 챌린지 카운트 반영")
     public ResponseEntity<?> recordMeal(
@@ -78,8 +75,7 @@ public class ChallengeController {
     }
 
 
-    // 3. 챌린지 추천 (DB & AI)
-
+    // 3. 챌린지 추천 (DB 프리셋만 남김)
     @GetMapping("/challenges/recommend/presets")
     @Operation(summary = "추천 챌린지 (DB 프리셋)", description = "서버에 저장된 기본 추천 목록을 빠르게 반환합니다.")
     public ResponseEntity<List<ChallengePresetDto>> getPresets(
@@ -88,11 +84,5 @@ public class ChallengeController {
         return ResponseEntity.ok(challengeService.getRecommendChallenges(keywords));
     }
 
-    @GetMapping("/challenges/recommend/ai")
-    @Operation(summary = "추천 챌린지 (AI 생성)", description = "Gemini AI가 키워드를 분석하여 새로운 챌린지를 제안합니다.")
-    public ResponseEntity<List<ChallengePresetDto>> getAiSuggestions(
-            @Parameter(description = "관심 키워드 (예: 다이어트, 근력)", required = false)
-            @RequestParam(required = false) List<String> keywords) {
-        return ResponseEntity.ok(challengeService.getAiChallenges(keywords));
-    }
+    
 }

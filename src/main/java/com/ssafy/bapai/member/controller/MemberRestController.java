@@ -314,8 +314,8 @@ public class MemberRestController {
     // 1-8. 비밀번호 찾기 1단계 (본인확인)
     @Operation(summary = "비밀번호 찾기 1단계 (본인확인)", description = "아이디, 이메일, 인증번호가 일치하는지 확인합니다.")
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
-            content = @io.swagger.v3.oas.annotations.media.Content(
-                    examples = @io.swagger.v3.oas.annotations.media.ExampleObject(
+            content = @Content(
+                    examples = @ExampleObject(
                             value = "{\"username\": \"ssafy_king\", \"email\": \"test01@ssafy.com\", \"code\": \"123456\"}"
                     )
             )
