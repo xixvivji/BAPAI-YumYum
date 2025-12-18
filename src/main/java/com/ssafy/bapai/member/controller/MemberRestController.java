@@ -40,7 +40,7 @@ public class MemberRestController {
     private final JwtUtil jwtUtil;
     private final OAuthService oAuthService;
 
-    // ★ [수정] Redis 리포지토리 주입 (기존 RefreshTokenDao 삭제)
+    // Redis 리포지토리 주입 (기존 RefreshTokenDao 삭제)
     private final RefreshTokenRepository refreshTokenRepository;
 
 
@@ -84,7 +84,7 @@ public class MemberRestController {
             String refreshToken = jwtUtil.createToken(loginUser.getUserId(), loginUser.getRole(),
                     refreshTokenExpireTime);
 
-            // ★ [수정] Redis에 저장 (DTO 대신 Entity 사용)
+            // Redis에 저장 (DTO 대신 Entity 사용)
             RefreshToken redisToken = RefreshToken.builder()
                     .userId(String.valueOf(loginUser.getUserId()))
                     .token(refreshToken)
@@ -152,7 +152,7 @@ public class MemberRestController {
             String refreshToken = jwtUtil.createToken(member.getUserId(), member.getRole(),
                     1000L * 60 * 60 * 24 * 14);
 
-            // ★ [수정] Redis에 저장
+            // Redis에 저장
             RefreshToken redisToken = RefreshToken.builder()
                     .userId(String.valueOf(member.getUserId()))
                     .token(refreshToken)
@@ -187,10 +187,6 @@ public class MemberRestController {
         try {
             String realToken = token.substring(7);
             Long userId = jwtUtil.getUserId(realToken);
-
-            // memberService.logout(userId) 내부에서도 refreshTokenRepository.deleteById()를 호출하도록 수정되어 있어야 합니다.
-            // 만약 memberService를 안 거치고 여기서 바로 지우려면:
-            // refreshTokenRepository.deleteById(String.valueOf(userId));
             memberService.logout(userId);
 
             return ResponseEntity.ok(Map.of("message", "로그아웃 성공"));
@@ -200,7 +196,6 @@ public class MemberRestController {
         }
     }
 
-    // ... (중간 중복 검사, 이메일 인증 등 기존 코드 유지) ...
 
     @Operation(summary = "이메일 중복 체크")
     @GetMapping("/auth/check-email")

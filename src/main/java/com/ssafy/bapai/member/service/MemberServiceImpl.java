@@ -55,10 +55,26 @@ public class MemberServiceImpl implements MemberService {
     public MemberDto login(String username, String password) {
         MemberDto member = memberDao.selectMemberByUsername(username);
 
-        if (member == null || "WITHDRAWN".equals(member.getStatus())) {
+        // 1. 유저 없음 체크
+        if (member == null) {
+            System.out.println("❌ 로그인 실패: 유저를 DB에서 못 찾음 (" + username + ")");
             return null;
         }
-        if (!passwordEncoder.matches(password, member.getPassword())) {
+
+        // 2. 상태 체크
+        if ("WITHDRAWN".equals(member.getStatus())) {
+            System.out.println("❌ 로그인 실패: 탈퇴한 회원임");
+            return null;
+        }
+
+        // 3. 비밀번호 체크 (여기가 문제일 확률 99%)
+        boolean matches = passwordEncoder.matches(password, member.getPassword());
+        System.out.println("🔍 [디버깅] 입력 비번: " + password);
+        System.out.println("🔍 [디버깅] DB 해시: " + member.getPassword());
+        System.out.println("🔍 [디버깅] 매칭 결과: " + matches);
+        System.out.println("🔑 '1234'의 진짜 해시값 생성: " + passwordEncoder.encode("1234"));
+        if (!matches) {
+            System.out.println("❌ 로그인 실패: 비밀번호 불일치");
             return null;
         }
 
@@ -66,7 +82,7 @@ public class MemberServiceImpl implements MemberService {
         return member;
     }
 
-    // ★ [수정] 로그아웃 (DB 삭제 -> Redis 삭제)
+    //로그아웃 (DB 삭제 -> Redis 삭제)
     @Override
     @Transactional
     public void logout(Long userId) {
@@ -86,7 +102,21 @@ public class MemberServiceImpl implements MemberService {
     @Override
     @Transactional
     public void updateMember(MemberDto member) {
+        // 1. 기본 정보 수정 (DB 반영)
         memberDao.updateMember(member);
+
+        // 2. 신체 정보가 바뀌었다면? -> 권장 칼로리(TDEE) 재계산 로직 실행
+        // (Null 체크를 꼼꼼히 해야 에러가 안 납니다)
+        if (member.getHeight() != null || member.getWeight() != null ||
+                member.getGender() != null || member.getBirthYear() != null ||
+                member.getActivityLevel() != null) {
+
+            // 변경된 최신 정보를 DB에서 다시 가져오기
+            // MemberDto updatedInfo = memberDao.selectMemberById(member.getUserId());
+            // 권장 칼로리 계산 메서드를 호출하거나 로직을 넣기
+            // 예: calculateAndSaveDietGoal(updatedInfo);
+            //
+        }
     }
 
     // 5. 이메일 중복 체크

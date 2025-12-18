@@ -107,9 +107,15 @@
         WHERE user_id = #{userId}
     </select>
 
+
     <update id="updateMember" parameterType="com.ssafy.bapai.member.dto.MemberDto">
         UPDATE member
         <set>
+            <if test="name != null">name = #{name},</if>
+            <if test="email != null">email = #{email},</if>
+            <if test="birthYear != null">birth_year = #{birthYear},</if>
+            <if test="gender != null">gender = #{gender},</if>
+
             <if test="nickname != null">nickname = #{nickname},</if>
             <if test="height != null">height = #{height},</if>
             <if test="weight != null">weight = #{weight},</if>
@@ -118,11 +124,12 @@
             <if test="customTdee != null">custom_tdee = #{customTdee},</if>
             <if test="role != null">role = #{role},</if>
             <if test="status != null">status = #{status},</if>
+
             updated_at = NOW()
         </set>
         WHERE user_id = #{userId}
     </update>
-
+    
     <update id="updatePassword">
         UPDATE member
         SET password         = #{password},
