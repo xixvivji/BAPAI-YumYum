@@ -1,5 +1,6 @@
 package com.ssafy.bapai.member.service;
 
+import com.ssafy.bapai.common.redis.RefreshTokenRepository;
 import com.ssafy.bapai.member.dao.HealthDao;
 import com.ssafy.bapai.member.dao.MemberDao;
 import com.ssafy.bapai.member.dto.MemberDto;
@@ -19,43 +20,37 @@ public class MemberServiceImpl implements MemberService {
     private final MemberDao memberDao;
     private final EmailService emailService;
     private final PasswordEncoder passwordEncoder;
-    private final HealthDao healthDao; // ★ 추가됨
+    private final HealthDao healthDao;
+
+    // ★ [추가] Redis 리포지토리 주입
+    private final RefreshTokenRepository refreshTokenRepository;
 
     // 1. 회원가입
     @Override
     @Transactional
     public void signup(MemberDto member) {
-        // 1) 비밀번호 암호화
         String encodedPwd = passwordEncoder.encode(member.getPassword());
         member.setPassword(encodedPwd);
-
-        // 2) 일반 가입은 무조건 LOCAL + ACTIVE
         member.setProvider("LOCAL");
         member.setStatus("ACTIVE");
 
-        // 3) 회원 기본 정보 저장 (여기서 PK인 userId가 생성됨)
         memberDao.insertMember(member);
-
-        // 4) 생성된 PK 가져오기
         Long newUserId = member.getUserId();
 
-        // 5) 초기 몸무게 히스토리 저장 (그래프 시작점)
         if (member.getWeight() != null) {
             memberDao.insertWeightHistory(newUserId, member.getWeight());
         }
 
-        // 6) 질병 정보 저장 (선택한 경우만)
         if (member.getDiseaseIds() != null && !member.getDiseaseIds().isEmpty()) {
             healthDao.insertMemberDiseases(newUserId, member.getDiseaseIds());
         }
 
-        // 7) 알레르기 정보 저장 (선택한 경우만)
         if (member.getAllergyIds() != null && !member.getAllergyIds().isEmpty()) {
             healthDao.insertMemberAllergies(newUserId, member.getAllergyIds());
         }
     }
 
-    // 2. 로그인 (아이디로 로그인)
+    // 2. 로그인
     @Override
     public MemberDto login(String username, String password) {
         MemberDto member = memberDao.selectMemberByUsername(username);
@@ -71,10 +66,14 @@ public class MemberServiceImpl implements MemberService {
         return member;
     }
 
+    // ★ [수정] 로그아웃 (DB 삭제 -> Redis 삭제)
     @Override
     @Transactional
     public void logout(Long userId) {
-        memberDao.deleteRefreshToken(userId);
+        // 기존 코드: memberDao.deleteRefreshToken(userId);
+
+        // 변경 코드: Redis에서 해당 유저의 리프레시 토큰 삭제
+        refreshTokenRepository.deleteById(String.valueOf(userId));
     }
 
     // 3. 회원 조회
@@ -165,7 +164,7 @@ public class MemberServiceImpl implements MemberService {
         return member != null && "LOCAL".equals(member.getProvider());
     }
 
-    // 13. 비밀번호 재설정 (임시 비번 발급)
+    // 13. 비밀번호 재설정
     @Override
     public boolean resetPassword(String username, String email, String code) {
         if (!verifyUserForReset(username, email, code)) {
@@ -209,16 +208,13 @@ public class MemberServiceImpl implements MemberService {
                     .username(username)
                     .provider(provider)
                     .providerId(providerId)
-                    .role("ROLE_GUEST") // 소셜 회원은 추가 정보 입력 전까지 GUEST
+                    .role("ROLE_GUEST")
                     .status("ACTIVE")
                     .isTempPassword(false).build();
 
-            member.setPassword("SOCIAL_LOGIN"); // 더미 패스워드
+            member.setPassword("SOCIAL_LOGIN");
 
-            // 소셜 로그인 시에도 insertMember 사용
             memberDao.insertMember(member);
-
-            // 방금 만든 회원 다시 조회
             member = memberDao.selectMemberByEmail(email);
         }
 
@@ -229,13 +225,8 @@ public class MemberServiceImpl implements MemberService {
     @Override
     public Map<String, List<OptionDto>> getHealthOptions() {
         Map<String, List<OptionDto>> options = new HashMap<>();
-
-        // 1. 질병 목록 조회
         options.put("diseases", healthDao.selectAllDiseases());
-
-        // 2. 알레르기 목록 조회
         options.put("allergies", healthDao.selectAllAllergies());
-
         return options;
     }
 }

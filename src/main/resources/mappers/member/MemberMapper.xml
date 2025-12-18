@@ -151,10 +151,4 @@
         WHERE user_id = #{userId}
     </update>
 
-    <delete id="deleteRefreshToken">
-        DELETE
-        FROM refresh_token
-        WHERE rt_key = #{userId}
-    </delete>
-
 </mapper>

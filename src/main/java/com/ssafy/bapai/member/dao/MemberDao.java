@@ -33,8 +33,7 @@ public interface MemberDao {
     int deleteMember(Long userId);
 
     int updateTempPassword(MemberDto member);
-
-    void deleteRefreshToken(Long userId);
+    
 
     // 회원가입 시 초기 몸무게 기록용
     void insertWeightHistory(@Param("userId") Long userId, @Param("weight") double weight);

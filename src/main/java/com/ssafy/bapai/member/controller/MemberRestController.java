@@ -1,9 +1,9 @@
 package com.ssafy.bapai.member.controller;
 
+import com.ssafy.bapai.common.redis.RefreshToken;
+import com.ssafy.bapai.common.redis.RefreshTokenRepository;
 import com.ssafy.bapai.common.util.JwtUtil;
-import com.ssafy.bapai.member.dao.RefreshTokenDao;
 import com.ssafy.bapai.member.dto.MemberDto;
-import com.ssafy.bapai.member.dto.RefreshTokenDto;
 import com.ssafy.bapai.member.service.EmailService;
 import com.ssafy.bapai.member.service.MemberService;
 import com.ssafy.bapai.member.service.OAuthService;
@@ -39,7 +39,9 @@ public class MemberRestController {
     private final EmailService emailService;
     private final JwtUtil jwtUtil;
     private final OAuthService oAuthService;
-    private final RefreshTokenDao refreshTokenDao;
+
+    // ★ [수정] Redis 리포지토리 주입 (기존 RefreshTokenDao 삭제)
+    private final RefreshTokenRepository refreshTokenRepository;
 
 
     // 1. 인증 & 가입
@@ -82,14 +84,13 @@ public class MemberRestController {
             String refreshToken = jwtUtil.createToken(loginUser.getUserId(), loginUser.getRole(),
                     refreshTokenExpireTime);
 
-            // 3. DB 저장
-            String expirationStr = java.time.LocalDateTime.now().plusDays(14).toString();
-            RefreshTokenDto rtDto = RefreshTokenDto.builder()
-                    .rtKey(String.valueOf(loginUser.getUserId()))
-                    .rtValue(refreshToken)
-                    .expiration(expirationStr)
+            // ★ [수정] Redis에 저장 (DTO 대신 Entity 사용)
+            RefreshToken redisToken = RefreshToken.builder()
+                    .userId(String.valueOf(loginUser.getUserId()))
+                    .token(refreshToken)
+                    .expiration(1209600L) // 14일 (초 단위)
                     .build();
-            refreshTokenDao.save(rtDto);
+            refreshTokenRepository.save(redisToken);
 
             Map<String, Object> result = new HashMap<>();
             result.put("userId", loginUser.getUserId());
@@ -151,13 +152,13 @@ public class MemberRestController {
             String refreshToken = jwtUtil.createToken(member.getUserId(), member.getRole(),
                     1000L * 60 * 60 * 24 * 14);
 
-            String expirationStr = java.time.LocalDateTime.now().plusDays(14).toString();
-            RefreshTokenDto rtDto = RefreshTokenDto.builder()
-                    .rtKey(String.valueOf(member.getUserId()))
-                    .rtValue(refreshToken)
-                    .expiration(expirationStr)
+            // ★ [수정] Redis에 저장
+            RefreshToken redisToken = RefreshToken.builder()
+                    .userId(String.valueOf(member.getUserId()))
+                    .token(refreshToken)
+                    .expiration(1209600L) // 14일
                     .build();
-            refreshTokenDao.save(rtDto);
+            refreshTokenRepository.save(redisToken);
 
             Map<String, Object> result = new HashMap<>();
             result.put("accessToken", token);
@@ -175,30 +176,31 @@ public class MemberRestController {
     }
 
     @Operation(summary = "로그아웃", description = "서버 및 DB의 리프레시 토큰을 만료시킵니다.")
-    @PostMapping("/auth/logout") // /api + /auth/logout = /api/auth/logout
+    @PostMapping("/auth/logout")
     public ResponseEntity<?> logout(
             @RequestHeader(value = "Authorization", required = false) String token) {
 
-        // 1. 토큰이 없는 경우 (이미 로그아웃 상태거나 잘못된 요청) -> 에러 안 내고 성공 처리
         if (token == null || !token.startsWith("Bearer ")) {
             return ResponseEntity.ok(Map.of("message", "이미 로그아웃 상태입니다."));
         }
 
         try {
-
             String realToken = token.substring(7);
-
             Long userId = jwtUtil.getUserId(realToken);
 
+            // memberService.logout(userId) 내부에서도 refreshTokenRepository.deleteById()를 호출하도록 수정되어 있어야 합니다.
+            // 만약 memberService를 안 거치고 여기서 바로 지우려면:
+            // refreshTokenRepository.deleteById(String.valueOf(userId));
             memberService.logout(userId);
 
             return ResponseEntity.ok(Map.of("message", "로그아웃 성공"));
 
         } catch (Exception e) {
-            // 토큰이 만료되었거나 잘못된 경우에도 그냥 로그아웃 처리
             return ResponseEntity.ok(Map.of("message", "로그아웃 처리됨 (토큰 만료)"));
         }
     }
+
+    // ... (중간 중복 검사, 이메일 인증 등 기존 코드 유지) ...
 
     @Operation(summary = "이메일 중복 체크")
     @GetMapping("/auth/check-email")
@@ -230,25 +232,11 @@ public class MemberRestController {
         return ResponseEntity.ok("사용 가능한 아이디입니다.");
     }
 
-    @Operation(summary = "비밀번호 찾기 (임시 비밀번호 발송)", description = "인증된 사용자에게 임시 비밀번호를 이메일로 발송합니다.")
-    @io.swagger.v3.oas.annotations.parameters.RequestBody(
-            content = @Content(
-                    mediaType = "application/json",
-
-                    examples = @ExampleObject(
-                            value = "{\"username\": \"ssafy_king\", \"email\": \"test01@ssafy.com\", \"code\": \"123456\"}"
-                    )
-            )
-    )
+    @Operation(summary = "비밀번호 찾기 (임시 비밀번호 발송)")
     @PostMapping("/auth/reset-password")
     public ResponseEntity<?> resetPassword(@RequestBody Map<String, String> req) {
-
-        boolean result = memberService.resetPassword(
-                req.get("username"),
-                req.get("email"),
-                req.get("code")
-        );
-
+        boolean result =
+                memberService.resetPassword(req.get("username"), req.get("email"), req.get("code"));
         if (result) {
             return ResponseEntity.ok("임시 비밀번호가 이메일로 전송되었습니다.");
         } else {
@@ -256,29 +244,19 @@ public class MemberRestController {
         }
     }
 
-    @Operation(summary = "새 비밀번호 중복 확인", description = "새 비밀번호가 현재 비밀번호와 같은지 확인합니다. (같으면 409, 다르면 200)")
-    @io.swagger.v3.oas.annotations.parameters.RequestBody(
-            content = @Content(examples = @ExampleObject(value = "{\"newPassword\": \"1234\"}"))
-    )
-
+    @Operation(summary = "새 비밀번호 중복 확인")
     @PostMapping("/members/check-new-password")
     public ResponseEntity<?> checkNewPassword(@RequestHeader("Authorization") String token,
                                               @RequestBody Map<String, String> req) {
         Long userId = jwtUtil.getUserId(token);
         String newPassword = req.get("newPassword");
-        log.info("[checkNewPassword] userId={}, newPassword={}", userId, newPassword);
-        // 서비스 로직 호출 (기존 비번과 비교)
         if (memberService.checkPassword(userId, newPassword)) {
-            log.info("[checkNewPassword][FAIL] 같은 비밀번호 사용 시도 userId={}", userId);
             return ResponseEntity.status(HttpStatus.CONFLICT).body("현재 사용 중인 비밀번호입니다.");
-
         }
-        log.info("[checkNewPassword][SUCCESS] 사용 가능한 비밀번호 userId={}", userId);
         return ResponseEntity.ok("사용 가능한 비밀번호입니다.");
     }
 
     @Operation(summary = "이메일 인증번호 발송")
-    @io.swagger.v3.oas.annotations.parameters.RequestBody(content = @Content(examples = @ExampleObject(value = "{\"email\": \"test@ssafy.com\"}")))
     @PostMapping("/auth/email/send")
     public ResponseEntity<?> sendEmail(@RequestBody Map<String, String> req) {
         try {
@@ -291,7 +269,6 @@ public class MemberRestController {
     }
 
     @Operation(summary = "이메일 인증번호 확인")
-    @io.swagger.v3.oas.annotations.parameters.RequestBody(content = @Content(examples = @ExampleObject(value = "{\"email\": \"test@ssafy.com\", \"code\": \"123456\"}")))
     @PostMapping("/auth/email/verify")
     public ResponseEntity<?> verifyEmail(@RequestBody Map<String, String> req) {
         if (emailService.verifyCode(req.get("email"), req.get("code"))) {
@@ -300,7 +277,7 @@ public class MemberRestController {
         return ResponseEntity.badRequest().body(Map.of("success", false));
     }
 
-    @Operation(summary = "아이디 찾기", description = "이메일 인증 후 아이디를 반환합니다.")
+    @Operation(summary = "아이디 찾기")
     @PostMapping("/auth/find-username")
     public ResponseEntity<?> findId(@RequestBody Map<String, String> req) {
         try {
@@ -311,15 +288,7 @@ public class MemberRestController {
         }
     }
 
-    // 1-8. 비밀번호 찾기 1단계 (본인확인)
-    @Operation(summary = "비밀번호 찾기 1단계 (본인확인)", description = "아이디, 이메일, 인증번호가 일치하는지 확인합니다.")
-    @io.swagger.v3.oas.annotations.parameters.RequestBody(
-            content = @Content(
-                    examples = @ExampleObject(
-                            value = "{\"username\": \"ssafy_king\", \"email\": \"test01@ssafy.com\", \"code\": \"123456\"}"
-                    )
-            )
-    )
+    @Operation(summary = "비밀번호 찾기 1단계 (본인확인)")
     @PostMapping("/auth/verify-reset")
     public ResponseEntity<?> verifyForReset(@RequestBody Map<String, String> req) {
         boolean isValid = memberService.verifyUserForReset(req.get("username"), req.get("email"),
@@ -330,7 +299,7 @@ public class MemberRestController {
         return ResponseEntity.badRequest().body(Map.of("success", false, "message", "정보 불일치"));
     }
 
-
+    // ★ [수정] 토큰 재발급 (DB -> Redis 조회)
     @Operation(summary = "토큰 재발급 (Refresh)", description = "리프레시 토큰으로 새 액세스 토큰을 발급받습니다.")
     @PostMapping("/auth/refresh")
     public ResponseEntity<?> refreshToken(@RequestBody Map<String, String> req) {
@@ -340,9 +309,13 @@ public class MemberRestController {
         }
 
         Long userId = jwtUtil.getUserId("Bearer " + refreshToken);
-        String dbToken = refreshTokenDao.findToken(String.valueOf(userId));
 
-        if (dbToken == null || !dbToken.equals(refreshToken)) {
+        // ★ Redis에서 토큰 조회
+        RefreshToken storedToken =
+                refreshTokenRepository.findById(String.valueOf(userId)).orElse(null);
+
+        // 토큰이 없거나(만료/로그아웃), 요청된 토큰과 다르면 실패
+        if (storedToken == null || !storedToken.getToken().equals(refreshToken)) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("유효하지 않음");
         }
 
@@ -353,8 +326,8 @@ public class MemberRestController {
 
     // 2. 회원 정보 & 건강 (토큰 필수)
 
-    @Operation(summary = "건강 정보 입력 (2단계)", description = "신체 정보를 입력하고 정회원(USER)으로 등업합니다.")
-    @PatchMapping("/members/me") // Patch로 통합됨
+    @Operation(summary = "건강 정보 입력 (2단계)")
+    @PatchMapping("/members/me")
     public ResponseEntity<?> updateMyInfo(@RequestHeader("Authorization") String token,
                                           @RequestBody MemberDto member) {
         Long userId = jwtUtil.getUserId(token);
@@ -386,8 +359,7 @@ public class MemberRestController {
         return ResponseEntity.ok(member);
     }
 
-    @Operation(summary = "비밀번호 확인", description = "정보 수정 전 본인 확인용")
-    @io.swagger.v3.oas.annotations.parameters.RequestBody(content = @Content(examples = @ExampleObject(value = "{\"password\": \"1234\"}")))
+    @Operation(summary = "비밀번호 확인")
     @PostMapping("/members/check-password")
     public ResponseEntity<?> checkPassword(@RequestHeader("Authorization") String token,
                                            @RequestBody Map<String, String> req) {
@@ -396,19 +368,11 @@ public class MemberRestController {
         return ResponseEntity.ok(Map.of("match", match));
     }
 
-    @Operation(summary = "비밀번호 변경", description = "로그인된 사용자의 비밀번호를 변경합니다.")
-    @io.swagger.v3.oas.annotations.parameters.RequestBody(
-            content = @Content(
-                    examples = @ExampleObject(
-                            //  userId 제거하고 비밀번호만 남김
-                            value = "{\"newPassword\": \"change1234\"}"
-                    )
-            )
-    )
+    @Operation(summary = "비밀번호 변경")
     @PatchMapping("/members/password")
     public ResponseEntity<?> updatePassword(@RequestHeader("Authorization") String token,
                                             @RequestBody Map<String, String> req) {
-        Long userId = jwtUtil.getUserId(token); // 토큰에서 꺼냄
+        Long userId = jwtUtil.getUserId(token);
         String newPassword = req.get("newPassword");
 
         if (newPassword == null || newPassword.isBlank()) {
@@ -427,10 +391,9 @@ public class MemberRestController {
         return ResponseEntity.ok("탈퇴 완료");
     }
 
-    @Operation(summary = "질병/알레르기 옵션 목록 조회", description = "회원가입 시 선택할 수 있는 질병과 알레르기 목록을 반환합니다.")
+    @Operation(summary = "질병/알레르기 옵션 목록 조회")
     @GetMapping("/members/options")
     public ResponseEntity<?> getHealthOptions() {
-        // { "diseases": [...], "allergies": [...] } 형태 반환
         return ResponseEntity.ok(memberService.getHealthOptions());
     }
 }
