@@ -27,4 +27,24 @@
         LIMIT 1
     </select>
 
+    <select id="selectMyStats" resultType="map">
+        SELECT IFNULL(AVG(score), 0)      as avgScore,
+               IFNULL(AVG(total_kcal), 0) as avgKcal
+        FROM diet
+        WHERE user_id = #{userId}
+          AND eat_date BETWEEN #{startDate} AND #{endDate}
+    </select>
+
+    <select id="selectRankerStats" resultType="map">
+        SELECT IFNULL(AVG(sub.score), 0)      as avgScore,
+               IFNULL(AVG(sub.total_kcal), 0) as avgKcal
+        FROM (SELECT d.score, d.total_kcal
+              FROM group_member gm
+                       JOIN diet d ON gm.user_id = d.user_id
+              WHERE gm.group_id = #{groupId}
+                AND d.eat_date BETWEEN #{startDate} AND #{endDate}
+              ORDER BY d.score DESC
+              LIMIT 3) as sub
+    </select>
+
 </mapper>

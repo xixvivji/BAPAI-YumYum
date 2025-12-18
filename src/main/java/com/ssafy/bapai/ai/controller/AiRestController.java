@@ -1,6 +1,7 @@
 package com.ssafy.bapai.ai.controller;
 
 import com.ssafy.bapai.ai.dto.AiReportResponse;
+import com.ssafy.bapai.ai.dto.GapReportDto;
 import com.ssafy.bapai.ai.service.AiService;
 import com.ssafy.bapai.challenge.dto.ChallengePresetDto;
 import com.ssafy.bapai.common.util.JwtUtil;
@@ -13,6 +14,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -81,5 +83,16 @@ public class AiRestController {
             @RequestHeader("Authorization") String token) {
         Long userId = jwtUtil.getUserId(token);
         return ResponseEntity.ok(aiService.getPeriodReport(userId, "MONTHLY"));
+    }
+
+    // ★ [신규 추가] 비교 분석 리포트
+    @Operation(summary = "비교 분석(Gap Analysis)", description = "나 vs 랭커 vs 목표를 비교 분석합니다.")
+    @GetMapping("/report/gap/{groupId}")
+    public ResponseEntity<GapReportDto> getGapReport(
+            @RequestHeader("Authorization") String token,
+            @PathVariable Long groupId,
+            @RequestParam(defaultValue = "WEEKLY") String type) {
+        Long userId = jwtUtil.getUserId(token);
+        return ResponseEntity.ok(aiService.getGapAnalysis(userId, groupId, type));
     }
 }
