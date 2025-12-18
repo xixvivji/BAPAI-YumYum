@@ -12,6 +12,16 @@ public interface HealthDao {
 
     List<OptionDto> selectAllAllergies();
 
+    // 내정보 조회
+    List<Integer> selectDiseaseIdsByUserId(Long userId);
+
+    List<Integer> selectAllergyIdsByUserId(Long userId);
+
+    //  삭제 메서드
+    void deleteMemberDiseases(Long userId);
+
+    void deleteMemberAllergies(Long userId);
+
     // 회원별 정보 저장
     void insertMemberDiseases(@Param("userId") Long userId,
                               @Param("diseaseIds") List<Integer> diseaseIds);

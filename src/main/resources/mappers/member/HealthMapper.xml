@@ -5,12 +5,26 @@
 <mapper namespace="com.ssafy.bapai.member.dao.HealthDao">
 
     <select id="selectAllDiseases" resultType="com.ssafy.bapai.member.dto.OptionDto">
-        SELECT disease_id as id, name FROM disease
+        SELECT disease_id as id, name
+        FROM disease
     </select>
 
     <select id="selectAllAllergies" resultType="com.ssafy.bapai.member.dto.OptionDto">
-        SELECT allergy_id as id, name FROM allergy
+        SELECT allergy_id as id, name
+        FROM allergy
     </select>
+
+    <delete id="deleteMemberDiseases">
+        DELETE
+        FROM member_disease
+        WHERE user_id = #{userId}
+    </delete>
+
+    <delete id="deleteMemberAllergies">
+        DELETE
+        FROM member_allergy
+        WHERE user_id = #{userId}
+    </delete>
 
     <insert id="insertMemberDiseases">
         INSERT INTO member_disease (user_id, disease_id) VALUES
@@ -25,4 +39,16 @@
             (#{userId}, #{aId})
         </foreach>
     </insert>
+
+    <select id="selectDiseaseIdsByUserId" resultType="int">
+        SELECT disease_id
+        FROM member_disease
+        WHERE user_id = #{userId}
+    </select>
+
+    <select id="selectAllergyIdsByUserId" resultType="int">
+        SELECT allergy_id
+        FROM member_allergy
+        WHERE user_id = #{userId}
+    </select>
 </mapper>
