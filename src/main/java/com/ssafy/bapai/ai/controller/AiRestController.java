@@ -40,7 +40,7 @@ public class AiRestController {
         return ResponseEntity.ok(aiService.analyzeImage(file));
     }
 
-    // 2. [추가] 다음 끼니 추천 (DietController에서 가져옴)
+    // 2.2 다음 끼니 추천 (DietController에서 가져옴)
     @Operation(summary = "다음 끼니 추천", description = "오늘 먹은 식단을 분석하여 부족한 영양소를 채울 메뉴를 추천합니다.")
     @GetMapping("/recommend")
     public ResponseEntity<?> recommendNextMeal(@RequestHeader("Authorization") String token) {
@@ -48,7 +48,7 @@ public class AiRestController {
         return ResponseEntity.ok(aiService.recommendNextMeal(userId));
     }
 
-    // 3. [추가] AI 챌린지 추천 (ChallengeService에서 가져옴)
+    // 3. AI 챌린지 추천 (ChallengeService에서 가져옴)
     @Operation(summary = "AI 챌린지 추천", description = "관심사 키워드(예: 다이어트, 근력)를 입력하면 챌린지 주제를 추천해줍니다.")
     @GetMapping("/challenges/recommend")
     public ResponseEntity<List<ChallengePresetDto>> recommendChallenges(
@@ -85,7 +85,7 @@ public class AiRestController {
         return ResponseEntity.ok(aiService.getPeriodReport(userId, "MONTHLY"));
     }
 
-    // ★ [신규 추가] 비교 분석 리포트
+    //  비교 분석 리포트
     @Operation(summary = "비교 분석(Gap Analysis)", description = "나 vs 랭커 vs 목표를 비교 분석합니다.")
     @GetMapping("/report/gap/{groupId}")
     public ResponseEntity<GapReportDto> getGapReport(

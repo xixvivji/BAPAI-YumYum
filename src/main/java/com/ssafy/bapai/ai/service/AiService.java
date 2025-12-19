@@ -8,16 +8,21 @@ import com.ssafy.bapai.ai.dto.ReportLogDto;
 import com.ssafy.bapai.challenge.dto.ChallengePresetDto;
 import com.ssafy.bapai.diet.dao.DietDao;
 import com.ssafy.bapai.diet.dto.DietDto;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import javax.imageio.ImageIO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,7 +39,7 @@ public class AiService {
     private final ChatClient visionClient;
     private final ChatClient reportClient;
 
-    // 생성자 주입 (Qualifier 명시)
+    // 생성자 주입
     public AiService(ObjectMapper objectMapper,
                      ReportDao reportDao,
                      DietDao dietDao,
@@ -47,10 +52,20 @@ public class AiService {
         this.reportClient = reportClient;
     }
 
-    // 1. 이미지 분석
+    // 1. 이미지 분석 (압축 버전)
     public String analyzeImage(MultipartFile file) {
         try {
-            Resource imageResource = new InputStreamResource(file.getInputStream());
+            // 압축 수행 (512px)
+            byte[] compressedImage = compressImage(file);
+
+            // 리소스 생성 (파일 이름 강제 지정 - 호환성 향상)
+            Resource imageResource =
+                    new org.springframework.core.io.ByteArrayResource(compressedImage) {
+                        @Override
+                        public String getFilename() {
+                            return "image.jpg";
+                        }
+                    };
 
             String prompt = """
                     이 음식 사진을 분석해서 다음 JSON 형식으로만 답해줘. 마크다운(```json)이나 설명 없이 순수 JSON 문자열만 줘.
@@ -71,9 +86,50 @@ public class AiService {
                     .content();
 
         } catch (Exception e) {
-            log.error("이미지 분석 실패", e);
+            log.error("이미지 분석 실패: " + e.getMessage()); // 스택 트레이스 대신 메시지만 깔끔하게
             return "{}";
         }
+    }
+
+    //  512px 리사이징 & 압축 로직
+    private byte[] compressImage(MultipartFile file) throws IOException {
+        BufferedImage originalImage = ImageIO.read(file.getInputStream());
+        if (originalImage == null) {
+            throw new IllegalArgumentException("이미지 파일이 아닙니다.");
+        }
+
+        // 기존 1024 -> 512로 변경
+        int targetWidth = 512;
+        int originalWidth = originalImage.getWidth();
+        int originalHeight = originalImage.getHeight();
+
+        // 이미 작으면 그대로 쓰되, JPG 변환은 수행 (PNG 용량이 클 수 있으므로)
+        if (originalWidth <= targetWidth) {
+            targetWidth = originalWidth;
+        }
+
+        int targetHeight = (int) ((double) targetWidth / originalWidth * originalHeight);
+
+        BufferedImage resizedImage =
+                new BufferedImage(targetWidth, targetHeight, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = resizedImage.createGraphics();
+
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
+                RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        g.drawImage(originalImage, 0, 0, targetWidth, targetHeight, null);
+        g.dispose();
+
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        ImageIO.write(resizedImage, "jpg", outputStream);
+
+        byte[] result = outputStream.toByteArray();
+
+        //  디버깅
+        System.out.println(
+                "📸 [이미지 압축] " + (file.getSize() / 1024) + "KB -> " + (result.length / 1024) +
+                        "KB (width: " + targetWidth + "px)");
+
+        return result;
     }
 
     // 2. 다음 끼니 추천

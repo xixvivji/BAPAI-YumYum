@@ -1,14 +1,17 @@
 package com.ssafy.bapai.diet.controller;
 
+import com.ssafy.bapai.common.s3.S3Service;
 import com.ssafy.bapai.common.util.JwtUtil;
 import com.ssafy.bapai.diet.dto.DietDto;
 import com.ssafy.bapai.diet.service.DietService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,7 +22,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/diet-logs")
@@ -29,22 +34,35 @@ public class DietRestController {
 
     private final DietService dietService;
     private final JwtUtil jwtUtil;
+    private final S3Service s3Service;
 
     // 1. 식단 기록 저장
-    @Operation(summary = "식단 기록 저장", description = "사용자가 확정한 식단 정보를 DB에 저장합니다.")
-    @PostMapping
-    public ResponseEntity<?> createDiet(@RequestHeader("Authorization") String token,
-                                        @RequestBody DietDto dietDto) {
-        Long userId = jwtUtil.getUserId(token);
+    @Operation(summary = "식단 기록 저장", description = "식단 정보(JSON)와 이미지 파일을 함께 전송합니다.")
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE) // ★ 멀티파트 설정
+    public ResponseEntity<?> createDiet(
+            @RequestHeader("Authorization") String token,
+            @RequestPart("diet") DietDto dietDto,           // JSON 데이터
+            @RequestPart(value = "file", required = false) MultipartFile file // 이미지 파일
+    ) {
+        Long userId = jwtUtil.getUserId(token.substring(7)); // Bearer 제거 안전하게
         dietDto.setUserId(userId);
 
-        dietService.saveDiet(dietDto);
+        try {
+            // ★ 사진이 있으면 S3 업로드
+            if (file != null && !file.isEmpty()) {
+                String imgUrl = s3Service.uploadFile(file, "diet"); // "diet" 폴더
+                dietDto.setDietImg(imgUrl);
+            }
 
-        return ResponseEntity.ok(Map.of(
-                "message", "식단이 저장되었습니다.",
-                "logId", dietDto.getDietId() != null ? dietDto.getDietId() : -1L,
-                "score", 85 // (추후 영양소 점수 계산 로직 추가 가능)
-        ));
+            dietService.saveDiet(dietDto);
+
+            return ResponseEntity.ok(Map.of(
+                    "message", "식단이 저장되었습니다.",
+                    "imgUrl", dietDto.getDietImg() != null ? dietDto.getDietImg() : ""
+            ));
+        } catch (IOException e) {
+            return ResponseEntity.internalServerError().body("이미지 업로드 중 오류 발생");
+        }
     }
 
     // 2. 식단 목록 조회 (월/일/주간)

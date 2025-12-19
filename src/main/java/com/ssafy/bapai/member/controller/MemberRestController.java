@@ -2,6 +2,7 @@ package com.ssafy.bapai.member.controller;
 
 import com.ssafy.bapai.common.redis.RefreshToken;
 import com.ssafy.bapai.common.redis.RefreshTokenRepository;
+import com.ssafy.bapai.common.s3.S3Service;
 import com.ssafy.bapai.common.util.JwtUtil;
 import com.ssafy.bapai.member.dto.MemberDto;
 import com.ssafy.bapai.member.service.EmailService;
@@ -11,6 +12,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.HashMap;
 import java.util.Map;
@@ -39,7 +41,7 @@ public class MemberRestController {
     private final EmailService emailService;
     private final JwtUtil jwtUtil;
     private final OAuthService oAuthService;
-
+    private final S3Service s3Service;
     // Redis 리포지토리 주입 (기존 RefreshTokenDao 삭제)
     private final RefreshTokenRepository refreshTokenRepository;
 
@@ -294,7 +296,7 @@ public class MemberRestController {
         return ResponseEntity.badRequest().body(Map.of("success", false, "message", "정보 불일치"));
     }
 
-    // ★ [수정] 토큰 재발급 (DB -> Redis 조회)
+    // 토큰 재발급 (DB -> Redis 조회)
     @Operation(summary = "토큰 재발급 (Refresh)", description = "리프레시 토큰으로 새 액세스 토큰을 발급받습니다.")
     @PostMapping("/auth/refresh")
     public ResponseEntity<?> refreshToken(@RequestBody Map<String, String> req) {
@@ -320,8 +322,23 @@ public class MemberRestController {
 
 
     // 2. 회원 정보 & 건강 (토큰 필수)
-
-    @Operation(summary = "건강 정보 입력 (2단계)")
+    @Operation(summary = "건강 정보 입력 (2단계)", description = "키, 몸무게, 활동량, 목표, 질환, 알레르기 정보만 입력합니다.")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            content = @Content(
+                    mediaType = "application/json",
+                    schema = @Schema(implementation = MemberDto.class),
+                    examples = @ExampleObject(value = "{\n" +
+                            "  \"height\": 175.5,\n" +
+                            "  \"weight\": 72,\n" +
+                            "  \"activityLevel\": \"NORMAL\",\n" +
+                            "  \"dietGoal\": \"LOSS\",\n" +
+                            "  \"diseaseIds\": [ 1, 5 ],\n" +
+                            "  \"allergyIds\": [ 2 ],\n" +
+                            "  \"birthYear\": 1998,\n" +
+                            "  \"gender\": \"M\"\n" +
+                            "}")
+            )
+    )
     @PatchMapping("/members/me")
     public ResponseEntity<?> updateMyInfo(@RequestHeader("Authorization") String token,
                                           @RequestBody MemberDto member) {
@@ -342,6 +359,7 @@ public class MemberRestController {
 
         return ResponseEntity.ok(Map.of("message", "수정 완료", "accessToken", newToken));
     }
+
 
     @Operation(summary = "내 정보 조회")
     @GetMapping("/members/me")
