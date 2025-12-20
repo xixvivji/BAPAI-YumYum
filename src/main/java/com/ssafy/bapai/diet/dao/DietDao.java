@@ -36,6 +36,15 @@ public interface DietDao {
     // 특정 식단의 음식 목록 조회
     List<DietDetailDto> selectDietDetailsByDietId(Long dietId);
 
+    void insertDietDetails(List<DietDetailDto> details);
+
     // 식단 수정 시 기존 음식 목록 삭제용
     void deleteDietDetailsByDietId(Long dietId);
+
+    List<DietDto> selectDietList(@Param("sort") String sort,
+                                 @Param("limit") int limit,
+                                 @Param("offset") int offset);
+
+    // ★ [추가] 전체 식단 개수 조회 (페이징용)
+    int selectDietCount();
 }

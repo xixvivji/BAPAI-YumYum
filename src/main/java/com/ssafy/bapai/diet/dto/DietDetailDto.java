@@ -24,4 +24,13 @@ public class DietDetailDto {
 
     @Schema(description = "섭취 칼로리 (해당 양 기준)", example = "165.0")
     private Double kcal;
+
+    @Schema(description = "탄수화물(g)", example = "20.5")
+    private Double carbs;
+
+    @Schema(description = "단백질(g)", example = "30.0")
+    private Double protein;
+
+    @Schema(description = "지방(g)", example = "5.0")
+    private Double fat;
 }

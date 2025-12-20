@@ -11,7 +11,12 @@
         <result property="mealType" column="meal_type"/>
         <result property="dietImg" column="diet_img"/>
         <result property="memo" column="memo"/>
+
         <result property="totalKcal" column="total_kcal"/>
+        <result property="totalCarbs" column="total_carbs"/>
+        <result property="totalProtein" column="total_protein"/>
+        <result property="totalFat" column="total_fat"/>
+
         <result property="score" column="score"/>
         <result property="aiAnalysis" column="ai_analysis"/>
 
@@ -22,18 +27,35 @@
             <result property="foodName" column="food_name"/>
             <result property="amount" column="amount"/>
             <result property="kcal" column="kcal"/>
+
+            <result property="carbs" column="carbs"/>
+            <result property="protein" column="protein"/>
+            <result property="fat" column="fat"/>
         </collection>
     </resultMap>
 
     <insert id="insertDiet" useGeneratedKeys="true" keyProperty="dietId"
             parameterType="com.ssafy.bapai.diet.dto.DietDto">
-        INSERT INTO diet (user_id, eat_date, meal_type, diet_img, memo, total_kcal, score, ai_analysis)
-        VALUES (#{userId}, #{eatDate}, #{mealType}, #{dietImg}, #{memo}, #{totalKcal}, #{score}, #{aiAnalysis})
+        INSERT INTO diet (user_id, eat_date, meal_type, diet_img, memo,
+                          total_kcal, total_carbs, total_protein, total_fat,
+                          score, ai_analysis, created_at)
+        VALUES (#{userId}, #{eatDate}, #{mealType}, #{dietImg}, #{memo},
+                #{totalKcal}, #{totalCarbs}, #{totalProtein}, #{totalFat},
+                #{score}, #{aiAnalysis}, NOW())
+    </insert>
+
+    <insert id="insertDietDetails" parameterType="java.util.List">
+        INSERT INTO diet_detail (diet_id, food_code, food_name, amount, kcal, carbs, protein, fat)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.dietId}, #{item.foodCode}, #{item.foodName}, #{item.amount},
+            #{item.kcal}, #{item.carbs}, #{item.protein}, #{item.fat})
+        </foreach>
     </insert>
 
     <insert id="insertDietDetail" parameterType="com.ssafy.bapai.diet.dto.DietDetailDto">
-        INSERT INTO diet_detail (diet_id, food_code, food_name, amount, kcal)
-        VALUES (#{dietId}, #{foodCode}, #{foodName}, #{amount}, #{kcal})
+        INSERT INTO diet_detail (diet_id, food_code, food_name, amount, kcal, carbs, protein, fat)
+        VALUES (#{dietId}, #{foodCode}, #{foodName}, #{amount}, #{kcal}, #{carbs}, #{protein}, #{fat})
     </insert>
 
     <select id="selectDailyDiets" resultMap="DietResultMap">
@@ -97,12 +119,13 @@
         FROM diet_detail
         WHERE diet_id = #{dietId}
     </delete>
+
     <select id="selectDietList" resultType="com.ssafy.bapai.diet.dto.DietDto">
         SELECT
         d.diet_id,
-        d.content,
-        d.created_at,
+        d.memo, d.created_at,
         d.diet_img,
+        d.total_kcal,
         -- 좋아요 수 계산
         (SELECT COUNT(*) FROM diet_likes dl WHERE dl.diet_id = d.diet_id) AS likeCount,
         -- 댓글 수 계산
@@ -127,4 +150,15 @@
 
         LIMIT #{limit} OFFSET #{offset}
     </select>
+    <select id="selectDietDetailsByDietId" resultType="com.ssafy.bapai.diet.dto.DietDetailDto">
+        SELECT *
+        FROM diet_detail
+        WHERE diet_id = #{dietId}
+    </select>
+
+    <select id="selectDietCount" resultType="int">
+        SELECT COUNT(*)
+        FROM diet
+    </select>
+
 </mapper>

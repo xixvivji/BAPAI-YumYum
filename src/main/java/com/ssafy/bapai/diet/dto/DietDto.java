@@ -29,6 +29,15 @@ public class DietDto {
     @Schema(description = "총 칼로리 (서버 자동 계산)", accessMode = Schema.AccessMode.READ_ONLY)
     private Double totalKcal;
 
+    @Schema(description = "총 탄수화물 (자동 계산)", accessMode = Schema.AccessMode.READ_ONLY)
+    private Double totalCarbs;
+
+    @Schema(description = "총 단백질 (자동 계산)", accessMode = Schema.AccessMode.READ_ONLY)
+    private Double totalProtein;
+
+    @Schema(description = "총 지방 (자동 계산)", accessMode = Schema.AccessMode.READ_ONLY)
+    private Double totalFat;
+
     @Schema(description = "건강 점수 (AI 분석)", accessMode = Schema.AccessMode.READ_ONLY)
     private Integer score;
 
@@ -37,4 +46,10 @@ public class DietDto {
 
     @Schema(description = "포함된 음식 목록")
     private List<DietDetailDto> foodList;
+
+    @Schema(description = "좋아요 수", accessMode = Schema.AccessMode.READ_ONLY)
+    private int likeCount;
+
+    @Schema(description = "댓글 수", accessMode = Schema.AccessMode.READ_ONLY)
+    private int commentCount; // 추후구현
 }
