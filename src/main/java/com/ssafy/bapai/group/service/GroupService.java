@@ -22,4 +22,6 @@ public interface GroupService {
     void delegateOwner(Long groupId, Long currentOwnerId, Long newOwnerId);
 
     List<GroupRankDto> getGroupRanking(Long groupId);
+
+    List<String> getHashtagList(String keyword);
 }

@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.Data;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -33,31 +35,54 @@ public class CommentRestController {
     private final CommentService commentService;
     private final JwtUtil jwtUtil;
 
-    // 특정 게시글의 댓글 목록 조회
-    @Operation(summary = "댓글 목록 조회", description = "로그인한 경우 본인의 추천 여부(userReaction)도 함께 반환됩니다.")
+    // 1. 댓글 목록 조회 (페이징 + 정렬 적용)
+    @Operation(summary = "댓글 목록 조회", description = "옵션: page(기본 1), size(기본 10), sort(latest, oldest, likes)")
     @GetMapping("/board/{boardId}")
-    public ResponseEntity<List<CommentDto>> getComments(
+    public ResponseEntity<Map<String, Object>> getComments(
             @PathVariable Long boardId,
-            // 토큰은 있을 수도 있고 없을 수도 (required = false)
+
+            // ★ 추가된 파라미터들
+            @Parameter(description = "페이지 번호 (1부터 시작)")
+            @RequestParam(defaultValue = "1") int page,
+
+            @Parameter(description = "한 페이지당 개수")
+            @RequestParam(defaultValue = "10") int size,
+
+            @Parameter(description = "정렬 기준: latest(최신순), oldest(오래된순), likes(좋아요순)")
+            @RequestParam(defaultValue = "latest") String sort,
+
             @Parameter(hidden = true) @RequestHeader(value = "Authorization", required = false)
             String token) {
 
         Long userId = null;
-
-        // 토큰이 있고 유효하다면 userId 추출
         if (token != null && token.startsWith("Bearer ")) {
             try {
                 userId = jwtUtil.getUserId(token.substring(7));
             } catch (Exception e) {
-                // 토큰이 만료되었거나 이상하면 그냥 비회원 취급
                 userId = null;
             }
         }
 
-        return ResponseEntity.ok(commentService.getComments(boardId, userId));
+        // 1. 오프셋 계산 (MySQL Limit용)
+        int offset = (page - 1) * size;
+
+        // 2. 서비스 호출 (목록 + 전체 개수)
+        // 서비스 메서드를 getComments -> getCommentList로 변경 필요 (파라미터 추가)
+        List<CommentDto> list = commentService.getCommentList(boardId, userId, sort, size, offset);
+        int totalCount = commentService.getCommentCount(boardId);
+
+        // 3. 결과 맵핑
+        Map<String, Object> response = new HashMap<>();
+        response.put("comments", list);
+        response.put("totalCount", totalCount);
+        response.put("currentPage", page);
+        response.put("hasNext", (page * size) < totalCount); // 다음 페이지 있는지 계산
+
+        return ResponseEntity.ok(response);
     }
 
-    // 댓글 작성
+    // ... (아래 작성, 수정, 삭제, 좋아요 코드는 기존과 동일하므로 생략하지 않고 그대로 둡니다) ...
+
     @Operation(summary = "댓글 작성", description = "게시글에 댓글을 답니다. parentId가 있으면 대댓글이 됩니다.")
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
             description = "작성할 댓글 정보", required = true,
@@ -77,9 +102,6 @@ public class CommentRestController {
         return ResponseEntity.ok(Map.of("message", "댓글이 등록되었습니다."));
     }
 
-
-    // 댓글 수정 추가
-
     @Operation(summary = "댓글 수정", description = "내 댓글 내용을 수정합니다.")
     @PutMapping("/{commentId}")
     public ResponseEntity<?> update(
@@ -89,7 +111,7 @@ public class CommentRestController {
 
         Long userId = getUserIdFromToken(token);
         dto.setCommentId(commentId);
-        dto.setUserId(userId); // 본인 확인용
+        dto.setUserId(userId);
 
         try {
             commentService.modifyComment(dto);
@@ -99,8 +121,6 @@ public class CommentRestController {
         }
     }
 
-
-    //  댓글 삭제 추가
     @Operation(summary = "댓글 삭제", description = "내 댓글을 삭제합니다.")
     @DeleteMapping("/{commentId}")
     public ResponseEntity<?> delete(
@@ -116,19 +136,14 @@ public class CommentRestController {
         }
     }
 
-
-    //  댓글 추천/비추천 등록 Body 방식
-
     @Operation(summary = "댓글 추천/비추천 등록", description = "Body에 { \"type\": \"LIKE\" } 형태로 전송")
     @PostMapping("/{commentId}/reaction")
     public ResponseEntity<?> addReaction(
             @Parameter(hidden = true) @RequestHeader("Authorization") String token,
             @PathVariable Long commentId,
-            @RequestBody ReactionRequestDto requestDto) { // Body로 받기
+            @RequestBody ReactionRequestDto requestDto) {
 
         String type = requestDto.getType();
-
-        // 유효성 검사
         if (type == null || (!type.equals("LIKE") && !type.equals("DISLIKE"))) {
             return ResponseEntity.badRequest()
                     .body(Map.of("message", "잘못된 type입니다. (LIKE 또는 DISLIKE)"));
@@ -143,8 +158,6 @@ public class CommentRestController {
         }
     }
 
-
-    // 댓글 추천/비추천 취소
     @Operation(summary = "댓글 추천/비추천 취소", description = "기존에 눌렀던 좋아요/싫어요를 취소합니다.")
     @DeleteMapping("/{commentId}/reaction")
     public ResponseEntity<?> cancelReaction(
@@ -160,7 +173,6 @@ public class CommentRestController {
         }
     }
 
-    // Helper 토큰 파싱
     private Long getUserIdFromToken(String token) {
         if (token != null && token.startsWith("Bearer ")) {
             return jwtUtil.getUserId(token.substring(7));
@@ -168,9 +180,8 @@ public class CommentRestController {
         throw new IllegalArgumentException("유효하지 않은 토큰입니다.");
     }
 
-    //요청용 내부 DTO
     @Data
     public static class ReactionRequestDto {
-        private String type; // LIKE or DISLIKE
+        private String type;
     }
 }

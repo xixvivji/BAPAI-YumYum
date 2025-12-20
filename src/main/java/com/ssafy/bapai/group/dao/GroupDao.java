@@ -46,4 +46,8 @@ public interface GroupDao {
     // 4. 랭킹
     List<GroupRankDto> selectGroupRanking(@Param("groupId") Long groupId,
                                           @Param("limit") int limit);
+
+    List<String> selectHashtagList(@Param("keyword") String keyword);
+
+    void insertHashtag(Map<String, Object> params);
 }

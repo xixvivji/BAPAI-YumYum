@@ -19,6 +19,9 @@ public interface CommentService {
 
     void modifyComment(CommentDto dto);
 
+    List<CommentDto> getCommentList(Long boardId, Long userId, String sort, int size, int offset);
+
+    int getCommentCount(Long boardId);
 
     // 추천/비추천 취소
     void deleteReaction(Long commentId, Long userId);

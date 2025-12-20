@@ -12,7 +12,7 @@ public class GroupDto {
     private String name;
     private String description;
     private String imgUrl;
-    private int maxCount;
+    private int maxMember;
     private String type;        // PUBLIC, PRIVATE
     private LocalDateTime createdAt;
 

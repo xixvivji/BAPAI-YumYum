@@ -37,4 +37,12 @@ public interface CommentDao {
     // 5. 반응 카운트 감소 (취소 시)
     void decreaseCommentReactionCount(@Param("commentId") Long commentId,
                                       @Param("type") String type);
+
+    List<CommentDto> selectCommentList(@Param("boardId") Long boardId,
+                                       @Param("userId") Long userId,
+                                       @Param("sort") String sort,
+                                       @Param("limit") int limit,
+                                       @Param("offset") int offset);
+
+    int countComments(Long boardId);
 }

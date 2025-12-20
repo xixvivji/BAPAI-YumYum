@@ -97,5 +97,34 @@
         FROM diet_detail
         WHERE diet_id = #{dietId}
     </delete>
+    <select id="selectDietList" resultType="com.ssafy.bapai.diet.dto.DietDto">
+        SELECT
+        d.diet_id,
+        d.content,
+        d.created_at,
+        d.diet_img,
+        -- 좋아요 수 계산
+        (SELECT COUNT(*) FROM diet_likes dl WHERE dl.diet_id = d.diet_id) AS likeCount,
+        -- 댓글 수 계산
+        (SELECT COUNT(*) FROM comments c WHERE c.diet_id = d.diet_id) AS commentCount
+        FROM diet d
+        WHERE 1=1
+        ORDER BY
+        <choose>
+            <when test="sort == 'likes'">
+                likeCount DESC, d.created_at DESC
+            </when>
+            <when test="sort == 'comments'">
+                commentCount DESC, d.created_at DESC
+            </when>
+            <when test="sort == 'oldest'">
+                d.created_at ASC
+            </when>
+            <otherwise>
+                d.created_at DESC
+            </otherwise>
+        </choose>
 
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
 </mapper>

@@ -2,9 +2,12 @@ package com.ssafy.bapai.diet.service;
 
 import com.ssafy.bapai.diet.dto.DietDto;
 import java.util.List;
+import org.springframework.web.multipart.MultipartFile;
 
 public interface DietService {
     void saveDiet(DietDto dietDto);
+
+    void registerDiet(DietDto dietDto, MultipartFile file);
 
     List<DietDto> getDailyDiets(Long userId, String date);
 
