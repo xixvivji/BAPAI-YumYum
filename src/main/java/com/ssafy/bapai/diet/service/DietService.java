@@ -22,4 +22,8 @@ public interface DietService {
     void updateDiet(DietDto dietDto);
 
     void deleteDiet(Long dietId);
+
+    List<DietDto> getDietList(String sort, int size, int offset);
+
+    int getDietCount();
 }
