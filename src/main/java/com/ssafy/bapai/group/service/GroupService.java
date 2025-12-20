@@ -24,4 +24,6 @@ public interface GroupService {
     List<GroupRankDto> getGroupRanking(Long groupId);
 
     List<String> getHashtagList(String keyword);
+
+    List<GroupDto> getMyGroups(Long userId);
 }

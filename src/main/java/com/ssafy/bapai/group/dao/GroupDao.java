@@ -50,4 +50,6 @@ public interface GroupDao {
     List<String> selectHashtagList(@Param("keyword") String keyword);
 
     void insertHashtag(Map<String, Object> params);
+
+    List<GroupDto> selectMyGroups(Long userId);
 }

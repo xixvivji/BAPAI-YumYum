@@ -124,4 +124,17 @@ public class GroupController {
             @RequestParam(required = false) String keyword) {
         return ResponseEntity.ok(groupService.getHashtagList(keyword));
     }
+
+    @Operation(summary = "내가 가입한 그룹 조회", description = "로그인한 사용자가 가입된 그룹 목록을 반환합니다.")
+    @GetMapping("/my")
+    public ResponseEntity<List<GroupDto>> getMyGroups(
+            @Parameter(hidden = true) @RequestHeader("Authorization") String token) {
+
+        // 1. 토큰에서 내 ID 꺼내기
+        Long userId = jwtUtil.getUserId(token.substring(7));
+
+        // 2. 서비스 호출
+        return ResponseEntity.ok(groupService.getMyGroups(userId));
+    }
+
 }

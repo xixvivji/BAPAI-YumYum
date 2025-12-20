@@ -143,4 +143,9 @@ public class GroupServiceImpl implements GroupService {
     public List<String> getHashtagList(String keyword) {
         return groupDao.selectHashtagList(keyword);
     }
+
+    @Override
+    public List<GroupDto> getMyGroups(Long userId) {
+        return groupDao.selectMyGroups(userId);
+    }
 }
