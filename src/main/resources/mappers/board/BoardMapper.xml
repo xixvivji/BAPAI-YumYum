@@ -16,6 +16,13 @@
                 <when test="key == 'nickname'">
                     AND m.name LIKE CONCAT('%', #{word}, '%')
                 </when>
+                <otherwise>
+                    AND (
+                    b.title LIKE CONCAT('%', #{word}, '%')
+                    OR
+                    b.content LIKE CONCAT('%', #{word}, '%')
+                    )
+                </otherwise>
             </choose>
         </if>
     </sql>
@@ -45,13 +52,17 @@
         AND br.user_id = #{userId}
 
         WHERE 1=1
+
         <if test="category != null and category != ''">
             AND b.category = #{category}
         </if>
+
         <include refid="search"/>
+
         ORDER BY b.created_at DESC
         LIMIT #{size} OFFSET #{offset}
     </select>
+
     <select id="selectBoardCount" resultType="long">
         SELECT COUNT(*)
         FROM board b
@@ -62,6 +73,7 @@
         </if>
         <include refid="search"/>
     </select>
+
     <select id="selectBoardDetail" resultType="com.ssafy.bapai.board.dto.BoardDto">
         SELECT b.board_id       AS boardId,
                b.user_id        AS userId,
@@ -105,7 +117,8 @@
         content = #{content},
         <if test="category != null">category = #{category},</if>
         <if test="imgUrl != null">img_url = #{imgUrl},</if>
-        updated_at = NOW() WHERE board_id = #{boardId}
+        updated_at = NOW()
+        WHERE board_id = #{boardId}
     </update>
 
     <delete id="deleteBoard">

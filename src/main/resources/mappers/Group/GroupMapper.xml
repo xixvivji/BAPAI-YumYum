@@ -4,8 +4,8 @@
 <mapper namespace="com.ssafy.bapai.group.dao.GroupDao">
 
     <insert id="insertGroup" useGeneratedKeys="true" keyProperty="groupId">
-        INSERT INTO groups (owner_id, name, description, img_url, max_count, type, created_at)
-        VALUES (#{ownerId}, #{name}, #{description}, #{imgUrl}, #{maxCount}, #{type}, NOW())
+        INSERT INTO `groups` (owner_id, name, description, max_member, type, created_at)
+        VALUES (#{ownerId}, #{name}, #{description}, #{maxMember}, #{type}, NOW())
     </insert>
 
     <insert id="insertGroupMember">
@@ -14,10 +14,16 @@
     </insert>
 
     <select id="selectGroupList" resultType="com.ssafy.bapai.group.dto.GroupDto">
-        SELECT t.group_id, t.owner_id, t.name, t.description, t.img_url, t.max_count, t.type, t.created_at,
+        SELECT t.group_id,
+        t.owner_id,
+        t.name,
+        t.description,
+        t.max_member,
+        t.type,
+        t.created_at,
         m.nickname AS ownerName,
         (SELECT COUNT(*) FROM group_member gm WHERE gm.group_id = t.group_id) AS memberCount
-        FROM groups t
+        FROM `groups` t
         JOIN member m ON t.owner_id = m.user_id
         WHERE 1=1
         <if test="keyword != null and keyword != ''">
@@ -26,8 +32,7 @@
             OR EXISTS (
             SELECT 1
             FROM group_hashtags gh
-            JOIN hashtags h ON gh.tag_id = h.hashtag_id
-            WHERE gh.group_id = t.group_id
+            JOIN hashtags h ON gh.tag_id = h.tag_id WHERE gh.group_id = t.group_id
             AND h.name LIKE CONCAT('%', #{keyword}, '%')
             )
             )
@@ -40,13 +45,12 @@
                t.owner_id,
                t.name,
                t.description,
-               t.img_url,
-               t.max_count,
+               t.max_member,
                t.type,
                t.created_at,
                m.nickname                                                            AS ownerName,
                (SELECT COUNT(*) FROM group_member gm WHERE gm.group_id = t.group_id) AS memberCount
-        FROM groups t
+        FROM `groups` t
                  JOIN member m ON t.owner_id = m.user_id
         WHERE t.group_id = #{groupId}
     </select>
@@ -79,7 +83,7 @@
     </select>
 
     <update id="updateGroupOwner">
-        UPDATE groups
+        UPDATE `groups`
         SET owner_id = #{newOwnerId}
         WHERE group_id = #{groupId}
     </update>
@@ -92,10 +96,7 @@
     </update>
 
     <select id="selectGroupRanking" resultType="com.ssafy.bapai.group.dto.GroupRankDto">
-        SELECT m.user_id,
-               m.nickname,
-               IFNULL(SUM(r.score), 0) as totalScore,
-               COUNT(r.report_id)      as reportCount
+        SELECT m.user_id, m.nickname, IFNULL(SUM(r.score), 0) as totalScore, COUNT(r.report_id) as reportCount
         FROM group_member gm
                  JOIN member m ON gm.user_id = m.user_id
                  LEFT JOIN report r ON m.user_id = r.user_id
@@ -113,14 +114,28 @@
     <select id="selectGroupTags" resultType="string">
         SELECT h.name
         FROM group_hashtags gh
-                 JOIN hashtags h ON gh.tag_id = h.hashtag_id
+                 JOIN hashtags h ON gh.tag_id = h.tag_id
         WHERE gh.group_id = #{groupId}
     </select>
 
     <select id="selectTagIdByName" resultType="long">
-        SELECT hashtag_id
+        SELECT tag_id
         FROM hashtags
         WHERE name = #{tagName}
     </select>
 
+    <select id="selectHashtagList" resultType="string">
+        SELECT name
+        FROM hashtags
+        WHERE 1=1
+        <if test="keyword != null and keyword != ''">
+            AND name LIKE CONCAT('%', #{keyword}, '%')
+        </if>
+        ORDER BY name ASC
+    </select>
+
+    <insert id="insertHashtag" useGeneratedKeys="true" keyProperty="tagId" parameterType="map">
+        INSERT INTO hashtags (name)
+        VALUES (#{name})
+    </insert>
 </mapper>

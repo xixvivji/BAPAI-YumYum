@@ -111,4 +111,16 @@ public class CommentServiceImpl implements CommentService {
             throw new SecurityException("권한이 없습니다."); // 또는 AccessDeniedException
         }
     }
+
+    @Override
+    public List<CommentDto> getCommentList(Long boardId, Long userId, String sort, int size,
+                                           int offset) {
+      
+        return commentDao.selectCommentList(boardId, userId, sort, size, offset);
+    }
+
+    @Override
+    public int getCommentCount(Long boardId) {
+        return commentDao.countComments(boardId);
+    }
 }

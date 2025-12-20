@@ -33,11 +33,16 @@ public class AiRestController {
     private final AiService aiService;
     private final JwtUtil jwtUtil;
 
-    // 1. 식단 이미지 분석
-    @Operation(summary = "식단 이미지 분석", description = "사진을 보내면 영양 정보를 분석해줍니다.")
+    // 1. 식단 이미지 분석 (테스트용)
+    // 수정됨: AiService의 변경된 analyzeFood 메서드(파일 + 음식명)를 호출하도록 변경
+    @Operation(summary = "식단 이미지 분석 (테스트)", description = "사진과 음식명(선택)을 보내면 영양 정보를 분석해줍니다. (실제 저장은 /api/diet-logs 사용 권장)")
     @PostMapping(value = "/analyze", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<?> analyzeImage(@RequestPart("file") MultipartFile file) {
-        return ResponseEntity.ok(aiService.analyzeImage(file));
+    public ResponseEntity<?> analyzeImage(
+            @RequestPart(value = "file", required = false) MultipartFile file,
+            @RequestParam(value = "foodName", required = false) String foodName) {
+
+        // AiService의 analyzeFood 메서드 호출
+        return ResponseEntity.ok(aiService.analyzeFood(file, foodName));
     }
 
     // 2.2 다음 끼니 추천 (DietController에서 가져옴)
@@ -85,7 +90,7 @@ public class AiRestController {
         return ResponseEntity.ok(aiService.getPeriodReport(userId, "MONTHLY"));
     }
 
-    //  비교 분석 리포트
+    // 비교 분석 리포트
     @Operation(summary = "비교 분석(Gap Analysis)", description = "나 vs 랭커 vs 목표를 비교 분석합니다.")
     @GetMapping("/report/gap/{groupId}")
     public ResponseEntity<GapReportDto> getGapReport(

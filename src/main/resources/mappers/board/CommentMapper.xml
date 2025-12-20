@@ -91,5 +91,49 @@
         <if test="type == 'DISLIKE'">dislike_count = dislike_count - 1</if>
         WHERE comment_id = #{commentId}
     </update>
+    <select id="selectCommentList" resultType="com.ssafy.bapai.board.dto.CommentDto">
+        SELECT
+        c.comment_id as commentId,
+        c.board_id as boardId,
+        c.user_id as userId,
+        c.parent_id as parentId,
+        c.content,
+        c.like_count as likeCount, c.dislike_count as dislikeCount, c.created_at as createdAt,
+        c.updated_at as updatedAt,
+        m.name as nickname,
+        <if test="userId != null">
+            (SELECT reaction_type
+            FROM comment_reaction
+            WHERE comment_id = c.comment_id
+            AND user_id = #{userId}) as userLiked
+        </if>
+        <if test="userId == null">
+            NULL as userLiked
+        </if>
 
+        FROM comment c
+        JOIN member m ON c.user_id = m.user_id
+        WHERE c.board_id = #{boardId}
+
+        ORDER BY
+        <choose>
+            <when test="sort == 'likes'">
+                c.like_count DESC, c.created_at DESC
+            </when>
+            <when test="sort == 'oldest'">
+                c.created_at ASC
+            </when>
+            <otherwise>
+                c.created_at DESC
+            </otherwise>
+        </choose>
+
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countComments" resultType="int">
+        SELECT COUNT(*)
+        FROM comment
+        WHERE board_id = #{boardId}
+    </select>
 </mapper>

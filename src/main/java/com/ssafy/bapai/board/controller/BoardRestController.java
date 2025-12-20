@@ -2,7 +2,6 @@ package com.ssafy.bapai.board.controller;
 
 import com.ssafy.bapai.board.dto.BoardDto;
 import com.ssafy.bapai.board.service.BoardService;
-import com.ssafy.bapai.board.service.CommentService;
 import com.ssafy.bapai.common.dto.PageResponse;
 import com.ssafy.bapai.common.s3.S3Service;
 import com.ssafy.bapai.common.util.JwtUtil;
@@ -26,7 +25,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -36,9 +34,8 @@ import org.springframework.web.multipart.MultipartFile;
 @Tag(name = "3. 게시판 API", description = "자유/리뷰/전문가 게시판 CRUD 및 추천 기능")
 public class BoardRestController {
 
-    private final S3Service s3Service; // S3 주입됨
+    private final S3Service s3Service;
     private final BoardService boardService;
-    private final CommentService commentService;
     private final JwtUtil jwtUtil;
 
     // 게시글 목록 조회
@@ -48,8 +45,8 @@ public class BoardRestController {
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String category,
-            @RequestParam(required = false) String key,
-            @RequestParam(required = false) String word,
+            @RequestParam(required = false) String key,  // 검색 기준 (title, content, nickname)
+            @RequestParam(required = false) String word, // 검색어
             @Parameter(hidden = true) @RequestHeader(value = "Authorization", required = false)
             String token) {
 
@@ -70,21 +67,24 @@ public class BoardRestController {
         return ResponseEntity.ok(boardService.getBoardDetail(boardId, userId));
     }
 
-    // 글 작성 (S3 적용 완료)
+    // ★ [수정됨] 글 작성 (@RequestPart -> @RequestParam)
     @Operation(summary = "게시글 작성", description = "이미지 파일을 포함하여 게시글을 작성합니다.")
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> write(
             @Parameter(hidden = true) @RequestHeader("Authorization") String token,
-            @ModelAttribute BoardDto boardDto,
-            @RequestPart(value = "image", required = false) MultipartFile file) {
+
+            @ModelAttribute BoardDto boardDto, // 폼 데이터 필드들
+
+            // ★ 수정: 스웨거 호환성을 위해 @RequestParam 사용
+            @Parameter(description = "이미지 파일")
+            @RequestParam(value = "image", required = false) MultipartFile file) {
 
         Long userId = jwtUtil.getUserId(token.substring(7));
         boardDto.setUserId(userId);
 
         try {
-
             if (file != null && !file.isEmpty()) {
-                String imgUrl = s3Service.uploadFile(file, "board"); // "board" 폴더에 저장
+                String imgUrl = s3Service.uploadFile(file, "board");
                 boardDto.setImgUrl(imgUrl);
             }
             boardService.writeBoard(boardDto);
@@ -94,19 +94,22 @@ public class BoardRestController {
         }
     }
 
-    // 글 수정 (S3 적용 완료)
+    // ★ [수정됨] 글 수정 (@RequestPart -> @RequestParam)
     @Operation(summary = "게시글 수정")
     @PutMapping(value = "/{boardId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> update(
             @Parameter(hidden = true) @RequestHeader("Authorization") String token,
             @PathVariable Long boardId,
+
             @ModelAttribute BoardDto boardDto,
-            @RequestPart(value = "image", required = false) MultipartFile file) {
+
+            // ★ 수정: @RequestParam 사용
+            @Parameter(description = "수정할 이미지 파일")
+            @RequestParam(value = "image", required = false) MultipartFile file) {
 
         Long userId = jwtUtil.getUserId(token.substring(7));
 
         try {
-
             if (file != null && !file.isEmpty()) {
                 String imgUrl = s3Service.uploadFile(file, "board");
                 boardDto.setImgUrl(imgUrl);
@@ -127,7 +130,6 @@ public class BoardRestController {
     @DeleteMapping("/{boardId}")
     public ResponseEntity<?> delete(
             @Parameter(hidden = true) @RequestHeader("Authorization") String token,
-            @Parameter(description = "삭제할 게시글 ID", example = "1")
             @PathVariable Long boardId) {
 
         Long userId = getUserIdFromToken(token);
@@ -139,7 +141,7 @@ public class BoardRestController {
         }
     }
 
-    // 추천/비추천
+    // 추천/비추천 등록
     @Operation(summary = "게시글 추천/비추천 등록")
     @PostMapping("/{boardId}/reaction")
     public ResponseEntity<?> addReaction(
@@ -169,17 +171,9 @@ public class BoardRestController {
         return ResponseEntity.ok(Map.of("message", "취소되었습니다."));
     }
 
-    // 댓글 목록 조회
-    @Operation(summary = "댓글 목록 조회")
-    @GetMapping("/{boardId}/comments")
-    public ResponseEntity<?> getComments(
-            @PathVariable Long boardId,
-            @Parameter(hidden = true) @RequestHeader(value = "Authorization", required = false)
-            String token) {
-
-        Long userId = getUserIdIfExist(token);
-        return ResponseEntity.ok(commentService.getComments(boardId, userId));
-    }
+    // ★ [삭제됨] getComments 메서드
+    // 댓글 조회는 CommentRestController의 '/api/comments/board/{boardId}'를 사용하세요!
+    // (페이징과 정렬 기능이 그쪽에만 구현되어 있습니다.)
 
     // 헬퍼 메서드
     private Long getUserIdFromToken(String token) {
@@ -200,7 +194,6 @@ public class BoardRestController {
         return null;
     }
 
-    // DTO 클래스
     @Data
     @Schema(description = "추천/비추천 요청 DTO")
     public static class ReactionRequestDto {

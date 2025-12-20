@@ -22,7 +22,12 @@ import java.util.stream.Collectors;
 import javax.imageio.ImageIO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.model.Media;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,11 +43,13 @@ public class AiService {
     private final DietDao dietDao;
     private final ChatClient visionClient;
     private final ChatClient reportClient;
+    private final ChatModel chatModel;
 
     // 생성자 주입
     public AiService(ObjectMapper objectMapper,
                      ReportDao reportDao,
                      DietDao dietDao,
+                     ChatModel chatModel,
                      @Qualifier("visionChatClient") ChatClient visionClient,
                      @Qualifier("reportChatClient") ChatClient reportClient) {
         this.objectMapper = objectMapper;
@@ -50,43 +57,62 @@ public class AiService {
         this.dietDao = dietDao;
         this.visionClient = visionClient;
         this.reportClient = reportClient;
+        this.chatModel = chatModel;
     }
 
-    // 1. 이미지 분석 (압축 버전)
-    public String analyzeImage(MultipartFile file) {
+    public String analyzeFood(MultipartFile file, String foodName) {
         try {
-            // 압축 수행 (512px)
-            byte[] compressedImage = compressImage(file);
+            // 사용자 입력 힌트가 있으면 강조
+            String userText = (foodName == null || foodName.isBlank())
+                    ? "이 음식 사진을 분석해줘."
+                    : "사용자가 입력한 음식명은 '" + foodName + "'이야. 이 정보를 최우선으로 참고해.";
 
-            // 리소스 생성 (파일 이름 강제 지정 - 호환성 향상)
-            Resource imageResource =
-                    new org.springframework.core.io.ByteArrayResource(compressedImage) {
-                        @Override
-                        public String getFilename() {
-                            return "image.jpg";
-                        }
-                    };
-
-            String prompt = """
-                    이 음식 사진을 분석해서 다음 JSON 형식으로만 답해줘. 마크다운(```json)이나 설명 없이 순수 JSON 문자열만 줘.
+            // ★ 수정 포인트: 프롬프트를 아주 구체적으로 변경
+            String jsonRequest = """
+                    
+                    위 정보를 바탕으로 영양 성분을 추정해서 아래 JSON 형식으로만 답해줘.
+                    
+                    [주의사항]
+                    1. 'foodName'은 영어, 괄호(), 설명 없이 **오직 한글 음식 이름만** 적어야 해.
+                       (예시: "Pizza(피자)" -> "피자", "된장찌개(Stew)" -> "된장찌개")
+                    2. 마크다운(```json)이나 다른 설명은 절대 붙이지 마. 순수 JSON 문자열만 줘.
+                    
+                    [응답 포맷]
                     {
-                        "menuName": "음식명(한글)",
-                        "calories": 300,
-                        "carbs": 50,
-                        "protein": 20,
-                        "fat": 10,
-                        "score": 85
+                        "foodName": "음식이름",
+                        "kcal": 0,
+                        "carbs": 0.0,
+                        "protein": 0.0,
+                        "fat": 0.0,
+                        "score": 80,
+                        "aiAnalysis": "영양소에 대한 짧은 한글 한 줄 평"
                     }
                     """;
 
-            return visionClient.prompt()
-                    .user(u -> u.text(prompt)
-                            .media(MimeTypeUtils.IMAGE_JPEG, imageResource))
-                    .call()
-                    .content();
+            // 1. 이미지가 있는 경우 (멀티모달)
+            if (file != null && !file.isEmpty()) {
+                byte[] compressedImage = compressImage(file); // 이미지 압축 메서드(기존 유지)
+                Resource imageResource = new ByteArrayResource(compressedImage);
+
+                String promptText = userText + " 사진의 양과 재료를 파악해서 분석해줘." + jsonRequest;
+
+                var userMessage = new UserMessage(
+                        promptText,
+                        List.of(new Media(MimeTypeUtils.IMAGE_JPEG, imageResource))
+                );
+                // Spring AI 호출
+                return chatModel.call(new Prompt(userMessage)).getResult().getOutput().getText();
+            }
+
+            // 2. 이미지가 없는 경우 (텍스트 기반)
+            else {
+                String promptText = "음식 사진은 없어. " + userText + " 일반적인 1인분 기준으로 분석해줘." + jsonRequest;
+                return chatModel.call(new Prompt(promptText)).getResult().getOutput().getText();
+            }
 
         } catch (Exception e) {
-            log.error("이미지 분석 실패: " + e.getMessage()); // 스택 트레이스 대신 메시지만 깔끔하게
+            e.printStackTrace(); // 로그 확인용
+            // 에러 나면 빈 JSON이라도 리턴해서 파싱 에러 방지
             return "{}";
         }
     }
