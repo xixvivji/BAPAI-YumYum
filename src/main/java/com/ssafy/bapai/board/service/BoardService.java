@@ -7,7 +7,7 @@ public interface BoardService {
 
     // 페이징 적용된 목록 조회
     PageResponse<BoardDto> getBoardList(int page, int size, String category, String key,
-                                        String word, Long userId);
+                                        String word, String sort, Long userId);
 
     BoardDto getBoardDetail(Long boardId, Long userId);
 

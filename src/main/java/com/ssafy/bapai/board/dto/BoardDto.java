@@ -1,6 +1,7 @@
 package com.ssafy.bapai.board.dto;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDateTime;
 import lombok.Data;
 
@@ -26,4 +27,7 @@ public class BoardDto {
     private int likeCount;    // 추천
     private int dislikeCount; // 비추천
     private String userLiked;
+
+    @Schema(description = "댓글 수", accessMode = Schema.AccessMode.READ_ONLY)
+    private int commentCount;
 }

@@ -20,7 +20,7 @@ public class BoardServiceImpl implements BoardService {
 
     @Override
     public PageResponse<BoardDto> getBoardList(int page, int size, String category, String key,
-                                               String word, Long userId) {
+                                               String word, String sort, Long userId) {
         int offset = (page - 1) * size;
 
         Map<String, Object> params = new HashMap<>();
@@ -29,8 +29,8 @@ public class BoardServiceImpl implements BoardService {
         params.put("category", category);
         params.put("key", key);
         params.put("word", word);
-
-        // 맵에 userId 담기 XML에서 쓸 거
+        // ★ 정렬 옵션 추가
+        params.put("sort", sort);
         params.put("userId", userId);
 
         List<BoardDto> list = boardDao.selectBoardList(params);

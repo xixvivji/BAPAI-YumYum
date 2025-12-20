@@ -39,20 +39,23 @@ public class BoardRestController {
     private final JwtUtil jwtUtil;
 
     // 게시글 목록 조회
-    @Operation(summary = "게시글 목록 조회", description = "로그인 시 userLiked(본인 반응) 포함")
+    @Operation(summary = "게시글 목록 조회", description = "sort 옵션: latest(최신), views(조회수), likes(좋아요), comments(댓글)")
     @GetMapping
     public ResponseEntity<PageResponse<BoardDto>> getList(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String category,
-            @RequestParam(required = false) String key,  // 검색 기준 (title, content, nickname)
-            @RequestParam(required = false) String word, // 검색어
+            @RequestParam(required = false) String key,
+            @RequestParam(required = false) String word,
+            // 정렬 옵션 추가 (기본값 latest)
+            @RequestParam(defaultValue = "latest") String sort,
             @Parameter(hidden = true) @RequestHeader(value = "Authorization", required = false)
             String token) {
 
         Long userId = getUserIdIfExist(token);
+        // 서비스 메서드에 sort 전달
         return ResponseEntity.ok(
-                boardService.getBoardList(page, size, category, key, word, userId));
+                boardService.getBoardList(page, size, category, key, word, sort, userId));
     }
 
     // 게시글 상세 조회
@@ -200,4 +203,5 @@ public class BoardRestController {
         @Schema(description = "반응 타입 (LIKE 또는 DISLIKE)", example = "LIKE")
         private String type;
     }
+
 }

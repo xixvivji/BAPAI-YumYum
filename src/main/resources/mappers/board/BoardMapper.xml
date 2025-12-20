@@ -42,14 +42,14 @@
         b.img_url AS imgUrl,
         m.name AS nickname,
 
+        -- ★ 댓글 수 계산 (정렬 및 표시용)
+        (SELECT COUNT(*) FROM comment c WHERE c.board_id = b.board_id) AS commentCount,
+
         br.reaction_type AS userLiked
 
         FROM board b
         JOIN member m ON b.user_id = m.user_id
-
-        LEFT JOIN board_reaction br
-        ON b.board_id = br.board_id
-        AND br.user_id = #{userId}
+        LEFT JOIN board_reaction br ON b.board_id = br.board_id AND br.user_id = #{userId}
 
         WHERE 1=1
 
@@ -59,7 +59,22 @@
 
         <include refid="search"/>
 
-        ORDER BY b.created_at DESC
+        ORDER BY
+        <choose>
+            <when test="sort == 'views'">
+                b.view_count DESC, b.created_at DESC
+            </when>
+            <when test="sort == 'likes'">
+                b.like_count DESC, b.created_at DESC
+            </when>
+            <when test="sort == 'comments'">
+                commentCount DESC, b.created_at DESC
+            </when>
+            <otherwise>
+                b.created_at DESC
+            </otherwise>
+        </choose>
+
         LIMIT #{size} OFFSET #{offset}
     </select>
 
@@ -75,28 +90,24 @@
     </select>
 
     <select id="selectBoardDetail" resultType="com.ssafy.bapai.board.dto.BoardDto">
-        SELECT b.board_id       AS boardId,
-               b.user_id        AS userId,
+        SELECT b.board_id                                                     AS boardId,
+               b.user_id                                                      AS userId,
                b.category,
                b.title,
                b.content,
-               b.img_url        AS imgUrl,
-               b.view_count     AS viewCount,
-               b.like_count     AS likeCount,
-               b.dislike_count  AS dislikeCount,
-               b.created_at     AS createdAt,
-               b.updated_at     AS updatedAt,
-               m.name           AS nickname,
-
-               br.reaction_type AS userLiked
-
+               b.img_url                                                      AS imgUrl,
+               b.view_count                                                   AS viewCount,
+               b.like_count                                                   AS likeCount,
+               b.dislike_count                                                AS dislikeCount,
+               b.created_at                                                   AS createdAt,
+               b.updated_at                                                   AS updatedAt,
+               m.name                                                         AS nickname,
+             
+               (SELECT COUNT(*) FROM comment c WHERE c.board_id = b.board_id) AS commentCount,
+               br.reaction_type                                               AS userLiked
         FROM board b
                  JOIN member m ON b.user_id = m.user_id
-
-                 LEFT JOIN board_reaction br
-                           ON b.board_id = br.board_id
-                               AND br.user_id = #{userId}
-
+                 LEFT JOIN board_reaction br ON b.board_id = br.board_id AND br.user_id = #{userId}
         WHERE b.board_id = #{boardId}
     </select>
 

@@ -138,4 +138,17 @@
         INSERT INTO hashtags (name)
         VALUES (#{name})
     </insert>
+
+    <select id="selectMyGroups" resultType="com.ssafy.bapai.group.dto.GroupDto">
+        SELECT g.group_id,
+               g.group_name,
+               g.description,
+               g.img_url,
+               g.created_at,
+               (SELECT COUNT(*) FROM group_members WHERE group_id = g.group_id) as memberCount
+        FROM `groups` g
+                 JOIN group_members gm ON g.group_id = gm.group_id
+        WHERE gm.user_id = #{userId}
+        ORDER BY g.created_at DESC
+    </select>
 </mapper>
