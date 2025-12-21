@@ -6,10 +6,9 @@ import com.ssafy.bapai.group.dto.GroupRankDto;
 import com.ssafy.bapai.group.service.GroupService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -33,28 +32,20 @@ public class GroupController {
     private final JwtUtil jwtUtil;
 
     @PostMapping
-    @Operation(summary = "모임 생성", description = "새로운 모임을 생성합니다. (이미지 없이 텍스트 정보만 입력)")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "생성 완료")
-    })
+    @Operation(summary = "모임 생성")
     public ResponseEntity<?> create(
-            @Parameter(description = "JWT 토큰", required = true)
-            @RequestHeader("Authorization") String token,
+            @Parameter(hidden = true) @RequestHeader("Authorization") String token,
             @RequestBody GroupDto groupDto) {
-
-        // 토큰에서 방장 ID 추출
         groupDto.setOwnerId(jwtUtil.getUserId(token.substring(7)));
-
         groupService.createGroup(groupDto);
-        return ResponseEntity.ok("모임이 생성되었습니다.");
+        return ResponseEntity.ok(Map.of("message", "모임이 생성되었습니다."));
     }
 
     @GetMapping
-    @Operation(summary = "모임 목록 조회 (검색)", description = "키워드로 모임 이름/태그를 검색합니다.")
+    @Operation(summary = "모임 목록 조회")
     public ResponseEntity<List<GroupDto>> list(
             @RequestParam(required = false) String keyword,
             @RequestHeader(value = "Authorization", required = false) String token) {
-
         Long userId = (token != null) ? jwtUtil.getUserId(token.substring(7)) : null;
         return ResponseEntity.ok(groupService.getList(keyword, userId));
     }
@@ -64,7 +55,6 @@ public class GroupController {
     public ResponseEntity<GroupDto> detail(
             @PathVariable Long groupId,
             @RequestHeader(value = "Authorization", required = false) String token) {
-
         Long userId = (token != null) ? jwtUtil.getUserId(token.substring(7)) : null;
         return ResponseEntity.ok(groupService.getDetail(groupId, userId));
     }
@@ -74,9 +64,8 @@ public class GroupController {
     public ResponseEntity<?> join(
             @PathVariable Long groupId,
             @RequestHeader("Authorization") String token) {
-
         groupService.joinGroup(groupId, jwtUtil.getUserId(token.substring(7)));
-        return ResponseEntity.ok("가입되었습니다.");
+        return ResponseEntity.ok(Map.of("message", "가입되었습니다."));
     }
 
     @DeleteMapping("/{groupId}/leave")
@@ -84,57 +73,47 @@ public class GroupController {
     public ResponseEntity<?> leave(
             @PathVariable Long groupId,
             @RequestHeader("Authorization") String token) {
-
         groupService.leaveGroup(groupId, jwtUtil.getUserId(token.substring(7)));
-        return ResponseEntity.ok("탈퇴하였습니다.");
+        return ResponseEntity.ok(Map.of("message", "탈퇴하였습니다."));
     }
 
     @DeleteMapping("/{groupId}/kick/{targetUserId}")
-    @Operation(summary = "멤버 강퇴 (방장 전용)")
+    @Operation(summary = "멤버 강퇴")
     public ResponseEntity<?> kick(
             @PathVariable Long groupId,
             @PathVariable Long targetUserId,
             @RequestHeader("Authorization") String token) {
-
         groupService.kickMember(groupId, jwtUtil.getUserId(token.substring(7)), targetUserId);
-        return ResponseEntity.ok("해당 멤버를 강퇴했습니다.");
+        return ResponseEntity.ok(Map.of("message", "해당 멤버를 강퇴했습니다."));
     }
 
     @PutMapping("/{groupId}/delegate/{newOwnerId}")
-    @Operation(summary = "방장 권한 위임 (방장 전용)")
+    @Operation(summary = "방장 권한 위임")
     public ResponseEntity<?> delegate(
             @PathVariable Long groupId,
             @PathVariable Long newOwnerId,
             @RequestHeader("Authorization") String token) {
-
         groupService.delegateOwner(groupId, jwtUtil.getUserId(token.substring(7)), newOwnerId);
-        return ResponseEntity.ok("방장 권한을 위임했습니다.");
+        return ResponseEntity.ok(Map.of("message", "방장 권한을 위임했습니다."));
     }
 
     @GetMapping("/{groupId}/ranking")
-    @Operation(summary = "모임 내 랭킹 조회 (Top 5)")
+    @Operation(summary = "모임 내 랭킹 조회")
     public ResponseEntity<List<GroupRankDto>> ranking(@PathVariable Long groupId) {
         return ResponseEntity.ok(groupService.getGroupRanking(groupId));
     }
 
     @GetMapping("/tags")
-    @Operation(summary = "해시태그 목록 조회 (자동완성)", description = "키워드를 입력하면 포함된 태그 목록을 반환합니다. (입력 없으면 전체 반환)")
-    public ResponseEntity<List<String>> getTags(
-            @Parameter(description = "검색할 태그명 (생략 시 전체)")
-            @RequestParam(required = false) String keyword) {
+    @Operation(summary = "해시태그 목록 조회")
+    public ResponseEntity<List<String>> getTags(@RequestParam(required = false) String keyword) {
         return ResponseEntity.ok(groupService.getHashtagList(keyword));
     }
 
-    @Operation(summary = "내가 가입한 그룹 조회", description = "로그인한 사용자가 가입된 그룹 목록을 반환합니다.")
-    @GetMapping("/my")
+    @Operation(summary = "내가 가입한 그룹 조회")
+    @GetMapping("/me")
     public ResponseEntity<List<GroupDto>> getMyGroups(
             @Parameter(hidden = true) @RequestHeader("Authorization") String token) {
-
-        // 1. 토큰에서 내 ID 꺼내기
         Long userId = jwtUtil.getUserId(token.substring(7));
-
-        // 2. 서비스 호출
         return ResponseEntity.ok(groupService.getMyGroups(userId));
     }
-
 }

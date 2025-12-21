@@ -6,6 +6,7 @@ import com.ssafy.bapai.group.service.GroupBoardServiceImpl;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -27,16 +28,15 @@ public class GroupBoardController {
     private final JwtUtil jwtUtil;
 
     @PostMapping
-    @Operation(summary = "게시글 작성", description = "type: 'NOTICE'(공지), 'FREE'(자유)")
+    @Operation(summary = "게시글 작성", description = "type: 'NOTICE', 'FREE'")
     public ResponseEntity<?> write(
             @PathVariable Long groupId,
             @RequestHeader("Authorization") String token,
             @RequestBody GroupBoardDto dto) {
-
         dto.setGroupId(groupId);
         dto.setUserId(jwtUtil.getUserId(token.substring(7)));
         groupBoardService.writeBoard(dto);
-        return ResponseEntity.ok("게시글이 등록되었습니다.");
+        return ResponseEntity.ok(Map.of("message", "게시글이 등록되었습니다."));
     }
 
     @GetMapping
@@ -45,27 +45,23 @@ public class GroupBoardController {
         return ResponseEntity.ok(groupBoardService.getList(groupId));
     }
 
-    @GetMapping("/{boardId}") // boardId
+    @GetMapping("/{boardId}")
     @Operation(summary = "게시글 상세 조회")
     public ResponseEntity<GroupBoardDto> detail(
             @PathVariable Long groupId,
             @PathVariable Long boardId,
             @RequestHeader(value = "Authorization", required = false) String token) {
-
         Long userId = (token != null) ? jwtUtil.getUserId(token.substring(7)) : null;
         return ResponseEntity.ok(groupBoardService.getDetail(boardId, userId));
     }
 
-    @DeleteMapping("/{boardId}") // boardId
+    @DeleteMapping("/{boardId}")
     @Operation(summary = "게시글 삭제")
     public ResponseEntity<?> delete(
             @PathVariable Long groupId,
             @PathVariable Long boardId,
             @RequestHeader("Authorization") String token) {
-
         groupBoardService.deleteBoard(boardId, jwtUtil.getUserId(token.substring(7)));
-        return ResponseEntity.ok("게시글이 삭제되었습니다.");
+        return ResponseEntity.ok(Map.of("message", "게시글이 삭제되었습니다."));
     }
-
-
 }

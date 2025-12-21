@@ -1,5 +1,6 @@
 package com.ssafy.bapai.diet.service;
 
+import com.ssafy.bapai.common.dto.PageResponse;
 import com.ssafy.bapai.diet.dto.DietDto;
 import java.util.List;
 import org.springframework.web.multipart.MultipartFile;
@@ -7,7 +8,8 @@ import org.springframework.web.multipart.MultipartFile;
 public interface DietService {
     void saveDiet(DietDto dietDto);
 
-    void registerDiet(DietDto dietDto, MultipartFile file);
+    DietDto analyzeDiet(MultipartFile file, String hint);
+
 
     List<DietDto> getDailyDiets(Long userId, String date);
 
@@ -23,7 +25,9 @@ public interface DietService {
 
     void deleteDiet(Long dietId);
 
-    List<DietDto> getDietList(String sort, int size, int offset);
+    PageResponse<DietDto> getDietFeed(String sort, int size, int page);
 
     int getDietCount();
+
+    int getDietStreak(Long userId);
 }

@@ -160,5 +160,10 @@
         SELECT COUNT(*)
         FROM diet
     </select>
-
+    <select id="selectDietDates" resultType="String">
+        SELECT DISTINCT eat_date
+        FROM diet
+        WHERE user_id = #{userId}
+        ORDER BY eat_date DESC
+    </select>
 </mapper>

@@ -38,53 +38,58 @@ public class BoardRestController {
     private final BoardService boardService;
     private final JwtUtil jwtUtil;
 
-    // 게시글 목록 조회
-    @Operation(summary = "게시글 목록 조회", description = "sort 옵션: latest(최신), views(조회수), likes(좋아요), comments(댓글)")
+    @Operation(summary = "게시글 목록 조회", description = "조건에 맞는 게시글 목록을 페이징하여 반환합니다.")
     @GetMapping
     public ResponseEntity<PageResponse<BoardDto>> getList(
+            @Parameter(description = "페이지 번호 (1부터 시작)", example = "1")
             @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "10") int size,
-            @RequestParam(required = false) String category,
-            @RequestParam(required = false) String key,
-            @RequestParam(required = false) String word,
-            // 정렬 옵션 추가 (기본값 latest)
-            @RequestParam(defaultValue = "latest") String sort,
-            @Parameter(hidden = true) @RequestHeader(value = "Authorization", required = false)
-            String token) {
 
+            @Parameter(description = "한 페이지당 게시글 수", example = "10")
+            @RequestParam(defaultValue = "10") int size,
+
+            @Parameter(description = "카테고리 필터 (없으면 전체 조회)", example = "FREE",
+                    schema = @Schema(allowableValues = {"FREE", "REVIEW", "EXPERT"}))
+            @RequestParam(required = false) String category,
+
+            @Parameter(description = "검색 조건 (제목, 내용, 작성자)", example = "title",
+                    schema = @Schema(allowableValues = {"title", "content", "nickname"}))
+            @RequestParam(required = false) String key,
+
+            @Parameter(description = "검색어 (key가 없을 경우 제목+내용 통합 검색)", example = "단백질")
+            @RequestParam(required = false) String word,
+
+            @Parameter(description = "정렬 기준", example = "latest",
+                    schema = @Schema(allowableValues = {"latest", "views", "likes", "comments"}))
+            @RequestParam(defaultValue = "latest") String sort,
+
+            @Parameter(hidden = true)
+            @RequestHeader(value = "Authorization", required = false) String token
+    ) {
         Long userId = getUserIdIfExist(token);
-        // 서비스 메서드에 sort 전달
         return ResponseEntity.ok(
                 boardService.getBoardList(page, size, category, key, word, sort, userId));
     }
 
-    // 게시글 상세 조회
-    @Operation(summary = "게시글 상세 조회", description = "로그인 시 userLiked 포함")
+    @Operation(summary = "게시글 상세 조회")
     @GetMapping("/{boardId}")
     public ResponseEntity<BoardDto> getDetail(
             @PathVariable Long boardId,
             @Parameter(hidden = true) @RequestHeader(value = "Authorization", required = false)
             String token) {
-
         Long userId = getUserIdIfExist(token);
         return ResponseEntity.ok(boardService.getBoardDetail(boardId, userId));
     }
 
-    // ★ [수정됨] 글 작성 (@RequestPart -> @RequestParam)
-    @Operation(summary = "게시글 작성", description = "이미지 파일을 포함하여 게시글을 작성합니다.")
+    @Operation(summary = "게시글 작성")
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> write(
             @Parameter(hidden = true) @RequestHeader("Authorization") String token,
-
-            @ModelAttribute BoardDto boardDto, // 폼 데이터 필드들
-
-            // ★ 수정: 스웨거 호환성을 위해 @RequestParam 사용
-            @Parameter(description = "이미지 파일")
-            @RequestParam(value = "image", required = false) MultipartFile file) {
+            @ModelAttribute BoardDto boardDto,
+            @Parameter(description = "이미지 파일") @RequestParam(value = "file", required = false)
+            MultipartFile file) { // ★ file로 통일
 
         Long userId = jwtUtil.getUserId(token.substring(7));
         boardDto.setUserId(userId);
-
         try {
             if (file != null && !file.isEmpty()) {
                 String imgUrl = s3Service.uploadFile(file, "board");
@@ -93,92 +98,69 @@ public class BoardRestController {
             boardService.writeBoard(boardDto);
             return ResponseEntity.ok(Map.of("message", "게시글이 등록되었습니다."));
         } catch (IOException e) {
-            return ResponseEntity.internalServerError().body("이미지 업로드 실패");
+            return ResponseEntity.internalServerError().body(Map.of("message", "이미지 업로드 실패"));
         }
     }
 
-    // ★ [수정됨] 글 수정 (@RequestPart -> @RequestParam)
     @Operation(summary = "게시글 수정")
     @PutMapping(value = "/{boardId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> update(
             @Parameter(hidden = true) @RequestHeader("Authorization") String token,
             @PathVariable Long boardId,
-
             @ModelAttribute BoardDto boardDto,
-
-            // ★ 수정: @RequestParam 사용
-            @Parameter(description = "수정할 이미지 파일")
-            @RequestParam(value = "image", required = false) MultipartFile file) {
+            @Parameter(description = "수정할 이미지 파일") @RequestParam(value = "file", required = false)
+            MultipartFile file) { // ★ file로 통일
 
         Long userId = jwtUtil.getUserId(token.substring(7));
-
         try {
             if (file != null && !file.isEmpty()) {
                 String imgUrl = s3Service.uploadFile(file, "board");
                 boardDto.setImgUrl(imgUrl);
             }
-
             boardDto.setBoardId(boardId);
             boardDto.setUserId(userId);
             boardService.modifyBoard(boardDto);
-
             return ResponseEntity.ok(Map.of("message", "게시글이 수정되었습니다."));
         } catch (IOException e) {
-            return ResponseEntity.internalServerError().body("이미지 업로드 실패");
+            return ResponseEntity.internalServerError().body(Map.of("message", "이미지 업로드 실패"));
         }
     }
 
-    // 글 삭제
     @Operation(summary = "게시글 삭제")
     @DeleteMapping("/{boardId}")
     public ResponseEntity<?> delete(
             @Parameter(hidden = true) @RequestHeader("Authorization") String token,
             @PathVariable Long boardId) {
-
         Long userId = getUserIdFromToken(token);
-        try {
-            boardService.removeBoard(boardId, userId);
-            return ResponseEntity.ok(Map.of("message", "게시글이 삭제되었습니다."));
-        } catch (SecurityException | IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
-        }
+        boardService.removeBoard(boardId, userId);
+        return ResponseEntity.ok(Map.of("message", "게시글이 삭제되었습니다."));
     }
 
-    // 추천/비추천 등록
     @Operation(summary = "게시글 추천/비추천 등록")
     @PostMapping("/{boardId}/reaction")
     public ResponseEntity<?> addReaction(
             @Parameter(hidden = true) @RequestHeader("Authorization") String token,
             @PathVariable Long boardId,
             @RequestBody ReactionRequestDto requestDto) {
-
         String type = requestDto.getType();
         if (!"LIKE".equals(type) && !"DISLIKE".equals(type)) {
             return ResponseEntity.badRequest().body(Map.of("message", "잘못된 type입니다."));
         }
-
         Long userId = getUserIdFromToken(token);
         boardService.addBoardReaction(boardId, userId, type);
         return ResponseEntity.ok(Map.of("message", "반영되었습니다."));
     }
 
-    // 추천/비추천 취소
     @Operation(summary = "게시글 추천/비추천 취소")
     @DeleteMapping("/{boardId}/reaction")
     public ResponseEntity<?> cancelReaction(
             @Parameter(hidden = true) @RequestHeader("Authorization") String token,
             @PathVariable Long boardId) {
-
         Long userId = getUserIdFromToken(token);
         boardService.deleteReaction(boardId, userId);
         return ResponseEntity.ok(Map.of("message", "취소되었습니다."));
     }
 
-    // ★ [삭제됨] getComments 메서드
-    // 댓글 조회는 CommentRestController의 '/api/comments/board/{boardId}'를 사용하세요!
-    // (페이징과 정렬 기능이 그쪽에만 구현되어 있습니다.)
-
-    // 헬퍼 메서드
     private Long getUserIdFromToken(String token) {
         if (token != null && token.startsWith("Bearer ")) {
             return jwtUtil.getUserId(token.substring(7));
@@ -187,21 +169,16 @@ public class BoardRestController {
     }
 
     private Long getUserIdIfExist(String token) {
-        if (token != null && token.startsWith("Bearer ")) {
-            try {
-                return jwtUtil.getUserId(token.substring(7));
-            } catch (Exception e) {
-                return null;
-            }
+        try {
+            return (token != null && token.startsWith("Bearer ")) ?
+                    jwtUtil.getUserId(token.substring(7)) : null;
+        } catch (Exception e) {
+            return null;
         }
-        return null;
     }
 
     @Data
-    @Schema(description = "추천/비추천 요청 DTO")
     public static class ReactionRequestDto {
-        @Schema(description = "반응 타입 (LIKE 또는 DISLIKE)", example = "LIKE")
         private String type;
     }
-
 }

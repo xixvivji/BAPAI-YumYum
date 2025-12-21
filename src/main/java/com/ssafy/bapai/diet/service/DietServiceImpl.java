@@ -3,6 +3,7 @@ package com.ssafy.bapai.diet.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.bapai.ai.service.AiService;
+import com.ssafy.bapai.common.dto.PageResponse;
 import com.ssafy.bapai.common.s3.S3Service;
 import com.ssafy.bapai.diet.dao.DietDao;
 import com.ssafy.bapai.diet.dto.DietDetailDto;
@@ -25,11 +26,12 @@ public class DietServiceImpl implements DietService {
     private final AiService aiService;
     private final ObjectMapper objectMapper;
 
-    // 1. 식단 등록 (이미지 + AI + DB저장)
+    // 1. 분석 API 로직 (저장 X, DTO 리턴 O)
     @Override
-    @Transactional
-    public void registerDiet(DietDto dietDto, MultipartFile file) {
-        // A. 이미지 업로드
+    public DietDto analyzeDiet(MultipartFile file, String hint) {
+        DietDto dietDto = new DietDto();
+
+        // (1) 이미지 S3 업로드 (미리 올려두고 URL을 획득)
         if (file != null && !file.isEmpty()) {
             try {
                 String imgUrl = s3Service.uploadFile(file, "diet");
@@ -40,32 +42,37 @@ public class DietServiceImpl implements DietService {
             }
         }
 
-        // B. AI 분석 요청
-        String aiResponse = aiService.analyzeFood(file, dietDto.getMemo());
+        // (2) AiService 호출 (힌트가 없으면 빈 문자열 처리)
+        // AiService가 JSON String을 반환한다고 가정
+        String aiResponse = aiService.analyzeFood(file, hint);
 
-        // C. AI 결과 파싱 (리스트로 변환)
+        // (3) 결과 파싱 (JSON String -> DTO의 foodList 세팅)
         applyAiResult(dietDto, aiResponse);
 
-        // D. 영양소 총합 계산 (음식 리스트 합계 -> DietDto)
+        // (4) 총합 계산 (프론트에 보여주기 위해 미리 계산)
         calculateTotalNutrition(dietDto);
 
-        // E. DB 저장
-        saveDiet(dietDto);
+        // DB 저장 없이 분석 결과 DTO만 리턴
+        return dietDto;
     }
+
 
     // 2. 순수 DB 저장 (메인 + 상세 한방 저장)
     @Override
     @Transactional
     public void saveDiet(DietDto dietDto) {
-        // 1) diet 테이블 저장 (ID 생성됨)
+        // (1) 영양소 총합 재계산 (사용자가 수량 등을 수정했을 수 있음)
+        calculateTotalNutrition(dietDto);
+
+        // (2) diet 테이블 저장
         dietDao.insertDiet(dietDto);
 
-        // 2) diet_detail 테이블 저장 (생성된 ID 연결 후 Bulk Insert)
+        // (3) diet_detail 테이블 저장
         if (dietDto.getFoodList() != null && !dietDto.getFoodList().isEmpty()) {
             for (DietDetailDto detail : dietDto.getFoodList()) {
                 detail.setDietId(dietDto.getDietId());
             }
-            dietDao.insertDietDetails(dietDto.getFoodList()); // 한방 쿼리 사용
+            dietDao.insertDietDetails(dietDto.getFoodList());
         }
     }
 
@@ -188,12 +195,48 @@ public class DietServiceImpl implements DietService {
     }
 
     @Override
-    public List<DietDto> getDietList(String sort, int size, int offset) {
-        return dietDao.selectDietList(sort, size, offset);
+    public PageResponse<DietDto> getDietFeed(String sort, int size, int page) {
+        int offset = (page - 1) * size;
+        List<DietDto> content = dietDao.selectDietList(sort, size, offset);
+        int totalElements = dietDao.selectDietCount();
+
+        return new PageResponse<>(content, page, size, totalElements);
     }
 
     @Override
     public int getDietCount() {
         return dietDao.selectDietCount();
+    }
+
+    @Override
+    public int getDietStreak(Long userId) {
+        // 1. DB에서 기록된 날짜들 가져오기 (이미 내림차순 정렬됨)
+        List<String> dates = dietDao.selectDietDates(userId);
+        if (dates.isEmpty()) {
+            return 0;
+        }
+
+        // 검색 속도를 위해 Set으로 변환
+        java.util.Set<String> dateSet = new java.util.HashSet<>(dates);
+
+        int streak = 0;
+        java.time.LocalDate checkDate = java.time.LocalDate.now(); // 오늘 날짜
+
+        // 2. 오늘 기록이 있는지 확인
+        // 만약 오늘 안 썼다면, 어제 기록이 있는지 확인 (어제 썼으면 스트릭 유지 중인 것)
+        if (!dateSet.contains(checkDate.toString())) {
+            checkDate = checkDate.minusDays(1); // 기준을 어제로 변경
+            if (!dateSet.contains(checkDate.toString())) {
+                return 0; // 어제도 안 썼으면 스트릭 끊김 (0일)
+            }
+        }
+
+        // 3. 과거로 가면서 연속 출석 카운트
+        while (dateSet.contains(checkDate.toString())) {
+            streak++;
+            checkDate = checkDate.minusDays(1); // 하루 전으로 이동
+        }
+
+        return streak;
     }
 }
