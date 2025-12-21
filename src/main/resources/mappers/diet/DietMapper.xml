@@ -27,7 +27,6 @@
             <result property="foodName" column="food_name"/>
             <result property="amount" column="amount"/>
             <result property="kcal" column="kcal"/>
-
             <result property="carbs" column="carbs"/>
             <result property="protein" column="protein"/>
             <result property="fat" column="fat"/>
@@ -102,9 +101,13 @@
 
     <update id="updateDiet">
         UPDATE diet
-        SET meal_type  = #{mealType},
-            memo       = #{memo},
-            total_kcal = #{totalKcal}
+        SET meal_type     = #{mealType},
+            memo          = #{memo},
+            total_kcal    = #{totalKcal},
+            diet_img      = #{dietImg},
+            total_carbs   = #{totalCarbs},
+            total_protein = #{totalProtein},
+            total_fat     = #{totalFat}
         WHERE diet_id = #{dietId}
     </update>
 
@@ -126,9 +129,7 @@
         d.memo, d.created_at,
         d.diet_img,
         d.total_kcal,
-        -- 좋아요 수 계산
         (SELECT COUNT(*) FROM diet_likes dl WHERE dl.diet_id = d.diet_id) AS likeCount,
-        -- 댓글 수 계산
         (SELECT COUNT(*) FROM comments c WHERE c.diet_id = d.diet_id) AS commentCount
         FROM diet d
         WHERE 1=1
@@ -147,9 +148,9 @@
                 d.created_at DESC
             </otherwise>
         </choose>
-
         LIMIT #{limit} OFFSET #{offset}
     </select>
+
     <select id="selectDietDetailsByDietId" resultType="com.ssafy.bapai.diet.dto.DietDetailDto">
         SELECT *
         FROM diet_detail
@@ -160,10 +161,31 @@
         SELECT COUNT(*)
         FROM diet
     </select>
+
     <select id="selectDietDates" resultType="String">
         SELECT DISTINCT eat_date
         FROM diet
         WHERE user_id = #{userId}
         ORDER BY eat_date DESC
     </select>
+
+    <select id="selectWaterInfo" resultType="map">
+        SELECT water_count, water_goal
+        FROM daily_log
+        WHERE user_id = #{userId}
+          AND date = #{date}
+    </select>
+
+    <insert id="updateWaterCountDelta">
+        INSERT INTO daily_log (user_id, date, water_count, water_goal)
+        VALUES (#{userId}, #{date}, GREATEST(0, 0 + #{delta}), 8) ON DUPLICATE KEY
+        UPDATE
+            water_count = GREATEST(0, water_count + #{delta})     </insert>
+
+    <insert id="updateWaterGoalDelta">
+        INSERT INTO daily_log (user_id, date, water_count, water_goal)
+        VALUES (#{userId}, #{date}, 0, GREATEST(0, 8 + #{delta})) ON DUPLICATE KEY
+        UPDATE
+            water_goal = GREATEST(0, water_goal + #{delta})       </insert>
+
 </mapper>
