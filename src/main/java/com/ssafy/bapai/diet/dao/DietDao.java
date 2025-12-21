@@ -3,6 +3,7 @@ package com.ssafy.bapai.diet.dao;
 import com.ssafy.bapai.diet.dto.DietDetailDto;
 import com.ssafy.bapai.diet.dto.DietDto;
 import java.util.List;
+import java.util.Map;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -47,6 +48,16 @@ public interface DietDao {
                                  @Param("limit") int limit,
                                  @Param("offset") int offset);
 
-    // ★ [추가] 전체 식단 개수 조회 (페이징용)
+    //  전체 식단 개수 조회 (페이징용)
     int selectDietCount();
+
+
+    void updateWaterCountDelta(@Param("userId") Long userId, @Param("date") String date,
+                               @Param("delta") int delta);
+
+    void updateWaterGoalDelta(@Param("userId") Long userId, @Param("date") String date,
+                              @Param("delta") int delta);
+
+    Map<String, Object> selectWaterInfo(@Param("userId") Long userId, @Param("date") String date);
+
 }

@@ -62,12 +62,11 @@ public class CommentRestController {
             }
         }
 
-        // ★ [수정] page가 0이나 음수로 들어오면 1로 보정 (에러 방지)
-        if (page < 1) {
-            page = 1;
-        }
 
-        int offset = (page - 1) * size;
+        if (page < 0) {
+            page = 0;
+        }
+        int offset = page * size;
 
         List<CommentDto> list = commentService.getCommentList(boardId, userId, sort, size, offset);
         long totalCount = commentService.getCommentCount(boardId);
@@ -86,6 +85,7 @@ public class CommentRestController {
                     examples = @ExampleObject(value = "{\"boardId\": 1, \"content\": \"댓글 내용\", \"parentId\": null}")
             )
     )
+
     @PostMapping
     public ResponseEntity<?> write(
             @Parameter(hidden = true) @RequestHeader("Authorization") String token,
