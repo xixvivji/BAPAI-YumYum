@@ -1,6 +1,7 @@
 package com.ssafy.bapai.ai.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.ssafy.bapai.ai.dao.ReportDao;
 import com.ssafy.bapai.ai.dto.AiReportResponse;
 import com.ssafy.bapai.ai.dto.GapReportDto;
@@ -45,7 +46,6 @@ public class AiService {
     private final ChatClient reportClient;
     private final ChatModel chatModel;
 
-    // 생성자 주입
     public AiService(ObjectMapper objectMapper,
                      ReportDao reportDao,
                      DietDao dietDao,
@@ -60,76 +60,128 @@ public class AiService {
         this.chatModel = chatModel;
     }
 
+    /**
+     * 1. 음식 분석 (가장 중요)
+     * - 프롬프트 강화 + 응답 클리닝 + 예외 처리 적용
+     */
     public String analyzeFood(MultipartFile file, String foodName) {
-        try {
-            // 사용자 입력 힌트가 있으면 강조
-            String userText = (foodName == null || foodName.isBlank())
-                    ? "이 음식 사진을 분석해줘."
-                    : "사용자가 입력한 음식명은 '" + foodName + "'이야. 이 정보를 최우선으로 참고해.";
+        // 에러 발생 시 반환할 안전한 기본값
+        String fallbackJson = createDefaultJson();
 
-            // ★ 수정 포인트: 프롬프트를 아주 구체적으로 변경
-            String jsonRequest = """
+        try {
+            // ★ [안전장치 1] 힌트 유효성 검사 (숫자, 특수문자만 있거나 너무 짧으면 무시)
+            String userHint = "";
+            if (foodName != null && !foodName.isBlank()) {
+                // 한글/영어가 하나도 없이 숫자나 특수문자만 있는지 정규식으로 검사
+                boolean isGarbage =
+                        foodName.matches("^[0-9\\s!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>/?`~]+$");
+
+                if (!isGarbage) {
+                    // 유효한 힌트일 때만 프롬프트에 추가
+                    userHint = " (사용자가 제공한 힌트: '" + foodName + "'. 단, 이 힌트가 사진과 명확히 다르다면 무시하세요.)";
+                }
+            }
+
+            // ★ [안전장치 2] 프롬프트 강화: 사진 우선 원칙 명시
+            String systemInstruction = """
+                    당신은 전문 영양사입니다. 음식 사진을 분석하여 영양 정보를 추정하세요.
                     
-                    위 정보를 바탕으로 영양 성분을 추정해서 아래 JSON 형식으로만 답해줘.
+                    [분석 규칙]
+                    1. 사용자의 힌트가 있더라도, **사진 속 음식과 다르면 사진을 최우선으로 분석**하세요.
+                    2. 음식 이름은 반드시 한국인이 흔히 쓰는 **한글 명칭**으로 작성하세요. (예: 'Kimchi Stew' -> '김치찌개')
+                    3. 응답은 오직 아래 JSON 포맷으로만 작성하세요. 마크다운이나 잡담 금지.
                     
-                    [주의사항]
-                    1. 'foodName'은 영어, 괄호(), 설명 없이 **오직 한글 음식 이름만** 적어야 해.
-                       (예시: "Pizza(피자)" -> "피자", "된장찌개(Stew)" -> "된장찌개")
-                    2. 마크다운(```json)이나 다른 설명은 절대 붙이지 마. 순수 JSON 문자열만 줘.
-                    
-                    [응답 포맷]
+                    [JSON 응답 예시]
                     {
-                        "foodName": "음식이름",
-                        "kcal": 0,
-                        "carbs": 0.0,
-                        "protein": 0.0,
-                        "fat": 0.0,
-                        "score": 80,
-                        "aiAnalysis": "영양소에 대한 짧은 한글 한 줄 평"
+                        "foodName": "김치찌개",
+                        "kcal": 450,
+                        "carbs": 20.5,
+                        "protein": 15.0,
+                        "fat": 10.2,
+                        "score": 85,
+                        "aiAnalysis": "단백질이 풍부하지만 나트륨이 조금 많아 보입니다."
                     }
                     """;
 
-            // 1. 이미지가 있는 경우 (멀티모달)
+            String aiResponseRaw;
+
+            // 1. 이미지 분석 요청
             if (file != null && !file.isEmpty()) {
-                byte[] compressedImage = compressImage(file); // 이미지 압축 메서드(기존 유지)
+                byte[] compressedImage = compressImage(file);
                 Resource imageResource = new ByteArrayResource(compressedImage);
 
-                String promptText = userText + " 사진의 양과 재료를 파악해서 분석해줘." + jsonRequest;
+                String promptText = "이 음식 사진을 분석해줘." + userHint + "\n" + systemInstruction;
 
                 var userMessage = new UserMessage(
                         promptText,
                         List.of(new Media(MimeTypeUtils.IMAGE_JPEG, imageResource))
                 );
-                // Spring AI 호출
-                return chatModel.call(new Prompt(userMessage)).getResult().getOutput().getText();
+                aiResponseRaw =
+                        chatModel.call(new Prompt(userMessage)).getResult().getOutput().getText();
+            }
+            // 2. 텍스트 분석 요청 (이미지 없을 때)
+            else {
+                // 이미지가 없는데 힌트까지 이상하면("1234") -> 기본값 리턴이 나음
+                if (userHint.isBlank()) {
+                    return fallbackJson;
+                }
+                String promptText =
+                        "음식 사진은 없어." + userHint + " 일반적인 1인분 기준으로 분석해줘.\n" + systemInstruction;
+                aiResponseRaw =
+                        chatModel.call(new Prompt(promptText)).getResult().getOutput().getText();
             }
 
-            // 2. 이미지가 없는 경우 (텍스트 기반)
-            else {
-                String promptText = "음식 사진은 없어. " + userText + " 일반적인 1인분 기준으로 분석해줘." + jsonRequest;
-                return chatModel.call(new Prompt(promptText)).getResult().getOutput().getText();
-            }
+            // 후처리 (JSON 클리닝 및 검증)
+            String cleanJson = cleanJsonOutput(aiResponseRaw);
+            objectMapper.readTree(cleanJson); // 파싱 테스트
+
+            return cleanJson;
 
         } catch (Exception e) {
-            e.printStackTrace(); // 로그 확인용
-            // 에러 나면 빈 JSON이라도 리턴해서 파싱 에러 방지
-            return "{}";
+            log.error("AI 분석 실패: {}", e.getMessage());
+            return fallbackJson;
         }
     }
 
-    //  512px 리사이징 & 압축 로직
+    // --- 헬퍼 메서드: JSON 클리닝 ---
+    private String cleanJsonOutput(String text) {
+        if (text == null) {
+            return "{}";
+        }
+        return text.trim()
+                .replace("```json", "")
+                .replace("```JSON", "")
+                .replace("```", "")
+                .trim();
+    }
+
+    // --- 헬퍼 메서드: 기본 JSON 생성 (에러 방지용) ---
+    private String createDefaultJson() {
+        ObjectNode root = objectMapper.createObjectNode();
+        root.put("foodName", "분석 실패 (직접 입력해주세요)");
+        root.put("kcal", 0);
+        root.put("carbs", 0.0);
+        root.put("protein", 0.0);
+        root.put("fat", 0.0);
+        root.put("score", 0);
+        root.put("aiAnalysis", "죄송합니다. 음식 분석에 실패했습니다.");
+        return root.toString();
+    }
+
+    // ---------------------------------------------------------
+    // 아래는 기존 로직 유지 (이미지 압축, 리포트 등)
+    // ---------------------------------------------------------
+
     private byte[] compressImage(MultipartFile file) throws IOException {
         BufferedImage originalImage = ImageIO.read(file.getInputStream());
         if (originalImage == null) {
             throw new IllegalArgumentException("이미지 파일이 아닙니다.");
         }
 
-        // 기존 1024 -> 512로 변경
-        int targetWidth = 512;
+        int targetWidth = 512; // 512px면 AI 인식에 충분함
         int originalWidth = originalImage.getWidth();
         int originalHeight = originalImage.getHeight();
 
-        // 이미 작으면 그대로 쓰되, JPG 변환은 수행 (PNG 용량이 클 수 있으므로)
         if (originalWidth <= targetWidth) {
             targetWidth = originalWidth;
         }
@@ -147,22 +199,13 @@ public class AiService {
 
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         ImageIO.write(resizedImage, "jpg", outputStream);
-
-        byte[] result = outputStream.toByteArray();
-
-        //  디버깅
-        System.out.println(
-                "📸 [이미지 압축] " + (file.getSize() / 1024) + "KB -> " + (result.length / 1024) +
-                        "KB (width: " + targetWidth + "px)");
-
-        return result;
+        return outputStream.toByteArray();
     }
 
     // 2. 다음 끼니 추천
     public String recommendNextMeal(Long userId) {
         String today = LocalDate.now().toString();
         List<DietDto> logs = dietDao.selectDailyDiets(userId, today);
-
         String prompt;
         if (logs.isEmpty()) {
             prompt = "오늘 기록된 식사가 없어. 가볍고 건강한 메뉴 3가지를 추천해줘.";
@@ -176,7 +219,6 @@ public class AiService {
             }
             prompt = "오늘 먹은 음식: " + sb.toString() + ". 부족한 영양소를 추측해서 다음 끼니 메뉴 3가지를 추천해줘.";
         }
-
         return visionClient.prompt().user(prompt).call().content();
     }
 
@@ -186,7 +228,6 @@ public class AiService {
         if (date == null) {
             date = LocalDate.now().toString();
         }
-
         List<DietDto> dailyLogs = dietDao.selectDailyDiets(userId, date);
         ReportLogDto cachedLog = reportDao.selectExistingReport(userId, "DAILY", date, date);
 
@@ -209,7 +250,6 @@ public class AiService {
                 totalKcal += kcal;
             }
             String prompt = sb.toString() + "\n총 " + totalKcal + "kcal. 영양 균형 조언 3줄 요약해줘.";
-
             aiMessage = visionClient.prompt().user(prompt).call().content();
         }
 
@@ -273,10 +313,10 @@ public class AiService {
 
         String jsonResult = visionClient.prompt().user(prompt).call().content();
 
+        // ★ 여기도 방어 로직 적용 (마크다운 제거)
+        jsonResult = cleanJsonOutput(jsonResult);
+
         try {
-            if (jsonResult.startsWith("```")) {
-                jsonResult = jsonResult.replaceAll("```json", "").replaceAll("```", "");
-            }
             ChallengePresetDto[] array =
                     objectMapper.readValue(jsonResult, ChallengePresetDto[].class);
             return Arrays.asList(array);
@@ -286,7 +326,7 @@ public class AiService {
         }
     }
 
-    // 6. 비교 분석 Gap Analysis (핵심 기능 - 실전 복구 완료)
+    // 6. Gap Analysis
     @Transactional
     public GapReportDto getGapAnalysis(Long userId, Long groupId, String type) {
         LocalDate end = LocalDate.now();
@@ -294,27 +334,21 @@ public class AiService {
         String sDate = start.toString();
         String eDate = end.toString();
 
-        // (1) DB 통계 조회
         Map<String, Object> myStats = reportDao.selectMyStats(userId, sDate, eDate);
         Map<String, Object> rankerStats = reportDao.selectRankerStats(groupId, sDate, eDate);
 
-        // (2) 안전한 값 추출 (DB 데이터가 없으면 0.0 처리)
         double myScore = getSafeDouble(myStats, "avgScore");
         double myKcal = getSafeDouble(myStats, "avgKcal");
         double rankerScore = getSafeDouble(rankerStats, "avgScore");
         double rankerKcal = getSafeDouble(rankerStats, "avgKcal");
-
-        // 목표 칼로리는 임시 2000 (나중에 회원 목표 테이블과 연동 추천)
         double goalKcal = 2000.0;
 
-        // (3) 캐싱 확인 & AI 분석
         ReportLogDto cached = reportDao.selectExistingReport(userId, "GAP_ANALYSIS", sDate, eDate);
         String aiMessage;
 
         if (cached != null) {
             aiMessage = cached.getAiMessage();
         } else {
-            // 데이터가 아예 없을 경우를 대비한 멘트 처리
             if (myScore == 0 && myKcal == 0) {
                 aiMessage = "아직 충분한 식단 기록이 없습니다. 식단을 꾸준히 기록하면 분석해드릴게요!";
             } else {
@@ -325,7 +359,6 @@ public class AiService {
                 );
                 aiMessage = reportClient.prompt().user(prompt).call().content();
 
-                // DB 저장
                 reportDao.insertReportLog(ReportLogDto.builder()
                         .userId(userId).reportType("GAP_ANALYSIS").startDate(sDate).endDate(eDate)
                         .scoreAverage(myScore).aiMessage(aiMessage).build());
@@ -338,7 +371,6 @@ public class AiService {
                 .goalKcal(goalKcal).aiAnalysis(aiMessage).build();
     }
 
-    // ★ Null 방지용 헬퍼 메서드
     private double getSafeDouble(Map<String, Object> map, String key) {
         if (map == null || map.get(key) == null) {
             return 0.0;

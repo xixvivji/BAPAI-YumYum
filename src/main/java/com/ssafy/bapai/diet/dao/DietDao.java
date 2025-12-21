@@ -33,6 +33,8 @@ public interface DietDao {
     // 상세 음식 1개 저장
     void insertDietDetail(DietDetailDto detailDto);
 
+    List<String> selectDietDates(Long userId);
+
     // 특정 식단의 음식 목록 조회
     List<DietDetailDto> selectDietDetailsByDietId(Long dietId);
 

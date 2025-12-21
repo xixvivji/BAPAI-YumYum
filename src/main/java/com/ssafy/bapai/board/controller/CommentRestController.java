@@ -2,6 +2,7 @@ package com.ssafy.bapai.board.controller;
 
 import com.ssafy.bapai.board.dto.CommentDto;
 import com.ssafy.bapai.board.service.CommentService;
+import com.ssafy.bapai.common.dto.PageResponse;
 import com.ssafy.bapai.common.util.JwtUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -9,7 +10,6 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.Data;
@@ -38,10 +38,9 @@ public class CommentRestController {
     // 1. 댓글 목록 조회 (페이징 + 정렬 적용)
     @Operation(summary = "댓글 목록 조회", description = "옵션: page(기본 1), size(기본 10), sort(latest, oldest, likes)")
     @GetMapping("/board/{boardId}")
-    public ResponseEntity<Map<String, Object>> getComments(
+    public ResponseEntity<PageResponse<CommentDto>> getComments(
             @PathVariable Long boardId,
 
-            // ★ 추가된 파라미터들
             @Parameter(description = "페이지 번호 (1부터 시작)")
             @RequestParam(defaultValue = "1") int page,
 
@@ -63,25 +62,20 @@ public class CommentRestController {
             }
         }
 
-        // 1. 오프셋 계산 (MySQL Limit용)
+        // ★ [수정] page가 0이나 음수로 들어오면 1로 보정 (에러 방지)
+        if (page < 1) {
+            page = 1;
+        }
+
         int offset = (page - 1) * size;
 
-        // 2. 서비스 호출 (목록 + 전체 개수)
-        // 서비스 메서드를 getComments -> getCommentList로 변경 필요 (파라미터 추가)
         List<CommentDto> list = commentService.getCommentList(boardId, userId, sort, size, offset);
-        int totalCount = commentService.getCommentCount(boardId);
+        long totalCount = commentService.getCommentCount(boardId);
 
-        // 3. 결과 맵핑
-        Map<String, Object> response = new HashMap<>();
-        response.put("comments", list);
-        response.put("totalCount", totalCount);
-        response.put("currentPage", page);
-        response.put("hasNext", (page * size) < totalCount); // 다음 페이지 있는지 계산
-
-        return ResponseEntity.ok(response);
+        // PageResponse로 통일해서 반환
+        return ResponseEntity.ok(new PageResponse<>(list, page, size, totalCount));
     }
 
-    // ... (아래 작성, 수정, 삭제, 좋아요 코드는 기존과 동일하므로 생략하지 않고 그대로 둡니다) ...
 
     @Operation(summary = "댓글 작성", description = "게시글에 댓글을 답니다. parentId가 있으면 대댓글이 됩니다.")
     @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -179,6 +173,7 @@ public class CommentRestController {
         }
         throw new IllegalArgumentException("유효하지 않은 토큰입니다.");
     }
+
 
     @Data
     public static class ReactionRequestDto {
