@@ -56,7 +56,7 @@ public class SecurityConfig {
         config.addAllowedOriginPattern("*"); // 모든 문자열 패턴 허용
         config.addAllowedOriginPattern("https://*.ngrok-free.dev"); // ngrok 도메인 명시
         config.addAllowedOriginPattern("http://localhost:*"); // 로컬 명시
-
+        config.addAllowedOrigin("http//:54.180.77.221");
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
