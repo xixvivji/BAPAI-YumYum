@@ -38,11 +38,24 @@ public class AiRestController {
     @Operation(summary = "식단 이미지 분석 (테스트)", description = "사진과 음식명(선택)을 보내면 영양 정보를 분석해줍니다. (실제 저장은 /api/diet-logs 사용 권장)")
     @PostMapping(value = "/analyze", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> analyzeImage(
-            @RequestPart(value = "file", required = false) MultipartFile file,
+            @RequestPart(value = "image", required = false) MultipartFile image,
             @RequestParam(value = "foodName", required = false) String foodName) {
+        // ★ [디버깅 로그] 요청 데이터 확인
+        System.out.println("========================================");
+        System.out.println(" >>> [AI 분석 API 호출됨] 데이터 확인 <<<");
+        System.out.println("1. 힌트(hint): " + foodName);
+
+        if (image != null && !image.isEmpty()) {
+            System.out.println("2. 파일 이름: " + image.getOriginalFilename());
+            System.out.println("3. 파일 크기: " + image.getSize() + " bytes");
+            System.out.println("4. 컨텐츠 타입: " + image.getContentType());
+        } else {
+            System.out.println("2. 파일 상태: ❌ 없음 (NULL 또는 비어있음)");
+        }
+        System.out.println("========================================");
 
         // AiService의 analyzeFood 메서드 호출
-        return ResponseEntity.ok(aiService.analyzeFood(file, foodName));
+        return ResponseEntity.ok(aiService.analyzeFood(image, foodName));
     }
 
     // 2.2 다음 끼니 추천 (DietController에서 가져옴)
