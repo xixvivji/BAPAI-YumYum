@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -48,51 +50,71 @@ public class DietRestController {
             @Parameter(description = "힌트(음식명)") @RequestParam(value = "hint", required = false)
             String hint) {
 
+        // ★ [디버깅 로그] 요청 데이터 확인
+        System.out.println("========================================");
+        System.out.println(" >>> [AI 분석 API 호출됨] 데이터 확인 <<<");
+        System.out.println("1. 힌트(hint): " + hint);
+
+        if (file != null && !file.isEmpty()) {
+            System.out.println("2. 파일 이름: " + file.getOriginalFilename());
+            System.out.println("3. 파일 크기: " + file.getSize() + " bytes");
+            System.out.println("4. 컨텐츠 타입: " + file.getContentType());
+        } else {
+            System.out.println("2. 파일 상태: ❌ 없음 (NULL 또는 비어있음)");
+        }
+        System.out.println("========================================");
+
         jwtUtil.getUserId(token.substring(7));
         return ResponseEntity.ok(dietService.analyzeDiet(file, hint));
     }
 
-    @Operation(summary = "식단 등록 (파라미터 방식)", description = "프론트에서 보내는 개별 데이터를 하나씩 받아서 저장합니다.")
+    @Operation(summary = "2단계: 식단 최종 등록 (파라미터 방식)", description = "프론트엔드에서 보내는 개별 데이터를 하나씩 받아서 저장합니다.")
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> createDiet(
             @RequestHeader("Authorization") String token,
-            // 1. 파일 받기
+
+            // 1. 파일 (선택)
             @RequestPart(value = "file", required = false) MultipartFile file,
 
-            // 2. 프론트엔드가 보내는 낱개 데이터들 (@RequestParam으로 하나씩 받기)
+            // 2. 텍스트 데이터 (낱개로 받기)
             @RequestParam("date") String date,
-            @RequestParam("time") String time,
+            @RequestParam(value = "time") String time,
             @RequestParam("mealType") String mealType,
             @RequestParam("foodName") String foodName,
             @RequestParam(value = "servings", defaultValue = "1") int servings,
-            // servings -> amount
+            // servings -> amount 매핑
             @RequestParam(value = "calories", defaultValue = "0") double calories,
-// calories -> kcal
+            // calories -> kcal 매핑
             @RequestParam(value = "carbs", defaultValue = "0") double carbs,
             @RequestParam(value = "protein", defaultValue = "0") double protein,
             @RequestParam(value = "fat", defaultValue = "0") double fat
     ) {
         Long userId = jwtUtil.getUserId(token.substring(7));
 
-        // 3. 받은 낱개 데이터들을 DietDto로 조립하기
+        // 3. DietDto 조립
         DietDto dietDto = new DietDto();
         dietDto.setUserId(userId);
         dietDto.setEatDate(date);
-
-        // 식사 타입 한글/영어 변환
-        if ("아침".equals(mealType)) {
-            dietDto.setMealType("BREAKFAST");
-        } else if ("점심".equals(mealType)) {
-            dietDto.setMealType("LUNCH");
-        } else if ("저녁".equals(mealType)) {
-            dietDto.setMealType("DINNER");
-        } else if ("간식".equals(mealType)) {
-            dietDto.setMealType("SNACK");
-        } else {
-            dietDto.setMealType(mealType != null ? mealType : "SNACK");
+        if (time != null) {
+            dietDto.setTime(time);
         }
+        // 식사 타입 영문 변환 (혹시 한글로 들어올 경우 대비)
+        String type = mealType;
+        if ("아침".equals(type)) {
+            type = "BREAKFAST";
+        } else if ("점심".equals(type)) {
+            type = "LUNCH";
+        } else if ("저녁".equals(type)) {
+            type = "DINNER";
+        } else if ("간식".equals(type)) {
+            type = "SNACK";
+        }
+        if (type == null || type.isBlank()) {
+            type = "SNACK";
+        }
+        dietDto.setMealType(type);
 
-        // 4. 음식 상세 정보(DietDetailDto) 만들어서 리스트에 넣기
+        // 4. 상세 정보(DietDetailDto) 조립
         DietDetailDto detail = new DietDetailDto();
         detail.setFoodName(foodName);
         detail.setAmount(servings); // servings를 amount에 넣음
@@ -100,10 +122,10 @@ public class DietRestController {
         detail.setCarbs(carbs);
         detail.setProtein(protein);
         detail.setFat(fat);
+        detail.setFoodCode("CUSTOM");
+        dietDto.setFoodList(Collections.singletonList(detail));
 
-        dietDto.setFoodList(java.util.Collections.singletonList(detail));
-
-        // 총합 영양소 세팅 (일단 1개니까 그대로 대입)
+        // 총합 영양소 세팅
         dietDto.setTotalKcal(calories);
         dietDto.setTotalCarbs(carbs);
         dietDto.setTotalProtein(protein);
@@ -116,7 +138,7 @@ public class DietRestController {
                 dietDto.setDietImg(imgUrl);
             }
 
-            // 6. 저장
+            // 6. 저장 요청
             dietService.saveDiet(dietDto);
 
             return ResponseEntity.ok(
@@ -219,35 +241,41 @@ public class DietRestController {
     }
 
 
-    @Operation(summary = "물 섭취량 조절 (+/-)", description = "type에 'plus' 또는 'minus'를 보내 섭취량을 1씩 조절합니다.")
+    @Operation(summary = "물 섭취량 조절 (+/-)", description = "Body에 { date: '2025-12-22', type: 'plus' } 형태로 보냅니다.")
     @PostMapping("/water/count")
     public ResponseEntity<?> changeWaterCount(
             @RequestHeader("Authorization") String token,
-            @RequestParam String date,
-            @RequestParam String type // "plus" or "minus"
+            @RequestBody WaterRequestDto request // ★ 변경: @RequestParam -> @RequestBody
     ) {
         Long userId = jwtUtil.getUserId(token.substring(7));
-        int delta = "plus".equals(type) ? 1 : -1;
 
-        dietService.changeWaterCount(userId, date, delta);
+        // request.getType()으로 꺼내서 사용
+        int delta = "plus".equals(request.getType()) ? 1 : -1;
+
+        // request.getDate()로 꺼내서 사용
+        dietService.changeWaterCount(userId, request.getDate(), delta);
+
         return ResponseEntity.ok(Map.of("message", "물 섭취량이 변경되었습니다."));
     }
 
-    /**
-     * 2. 물 목표량 조절 (Plus / Minus)
-     * 요청: POST /api/diet-logs/water/goal?date=2025-12-21&type=plus (또는 minus)
-     */
-    @Operation(summary = "물 목표량 조절 (+/-)", description = "type에 'plus' 또는 'minus'를 보내 목표량을 1씩 조절합니다.")
+    @Operation(summary = "물 목표량 조절 (+/-)", description = "Body에 { date: '2025-12-22', type: 'plus' } 형태로 보냅니다.")
     @PostMapping("/water/goal")
     public ResponseEntity<?> changeWaterGoal(
             @RequestHeader("Authorization") String token,
-            @RequestParam String date,
-            @RequestParam String type // "plus" or "minus"
+            @RequestBody WaterRequestDto request // ★ 변경: @RequestParam -> @RequestBody
     ) {
         Long userId = jwtUtil.getUserId(token.substring(7));
-        int delta = "plus".equals(type) ? 1 : -1;
 
-        dietService.changeWaterGoal(userId, date, delta);
+        int delta = "plus".equals(request.getType()) ? 1 : -1;
+
+        dietService.changeWaterGoal(userId, request.getDate(), delta);
+
         return ResponseEntity.ok(Map.of("message", "물 목표량이 변경되었습니다."));
     }
+}
+
+@lombok.Data
+class WaterRequestDto {
+    private String date;
+    private String type; // "plus" or "minus"
 }

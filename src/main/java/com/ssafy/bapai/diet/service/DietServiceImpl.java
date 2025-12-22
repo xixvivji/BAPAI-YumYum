@@ -10,6 +10,7 @@ import com.ssafy.bapai.diet.dto.DailyDietLogDto;
 import com.ssafy.bapai.diet.dto.DietDetailDto;
 import com.ssafy.bapai.diet.dto.DietDto;
 import com.ssafy.bapai.diet.dto.DietLogItemDto;
+import com.ssafy.bapai.diet.dto.PeriodDietLogDto;
 import com.ssafy.bapai.diet.dto.StreakDto;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -133,7 +134,7 @@ public class DietServiceImpl implements DietService {
                             .protein(food.getProtein() != null ? food.getProtein() : 0)
                             .fat(food.getFat() != null ? food.getFat() : 0)
                             .mealType(diet.getMealType())
-                            .time(null) // DB에 time 컬럼이 없으면 null, 있으면 diet.getTime()
+                            .time(diet.getTime())
                             .servings(food.getAmount())
                             .build();
 
@@ -161,25 +162,55 @@ public class DietServiceImpl implements DietService {
      * 주간/월간 조회: 기간 내 날짜별로 Loop 돌면서 Map 생성 (Key: "1", "2" ...)
      */
     @Override
-    public Map<String, DailyDietLogDto> getPeriodDietLogs(Long userId, String startDate,
-                                                          String endDate) {
-        Map<String, DailyDietLogDto> resultMap = new LinkedHashMap<>(); // 순서 보장 (1, 2, 3...)
+    public PeriodDietLogDto getPeriodDietLogs(Long userId, String startDate, String endDate) {
+        Map<String, DailyDietLogDto> resultMap = new LinkedHashMap<>();
 
         java.time.LocalDate start = java.time.LocalDate.parse(startDate);
         java.time.LocalDate end = java.time.LocalDate.parse(endDate);
+
+        // ★ 전체 합계를 저장할 변수들 초기화
+        int periodMealCount = 0;
+        int periodSnackCount = 0;
+        double periodKcal = 0;
+        double periodCarbs = 0;
+        double periodProtein = 0;
+        double periodFat = 0;
 
         int index = 1;
 
         while (!start.isAfter(end)) {
             String currDate = start.toString();
 
-            // 위에서 만든 하루치 로직 재사용 (코드 중복 방지)
+            // 1. 하루치 데이터 가져오기 (기존 로직 활용)
             DailyDietLogDto dailyLog = getDailyDietLog(userId, currDate);
 
+            // 2. ★ 전체 합계에 하루치 데이터를 누적 (더하기)
+            periodMealCount += dailyLog.getTotalMealCount();
+            periodSnackCount += dailyLog.getTotalSnackCount();
+            periodKcal += dailyLog.getTotalCalories();
+            periodCarbs += dailyLog.getTotalCarbs();
+            periodProtein += dailyLog.getTotalProtein();
+            periodFat += dailyLog.getTotalFat();
+
+            // 3. 맵에 담기 (1일차, 2일차...)
             resultMap.put(String.valueOf(index++), dailyLog);
+
             start = start.plusDays(1);
         }
-        return resultMap;
+
+        // 4. 최종 결과 DTO 생성해서 반환
+        return PeriodDietLogDto.builder()
+                .startDate(startDate)
+                .endDate(endDate)
+                .totalMealCount(periodMealCount)
+                .totalSnackCount(periodSnackCount)
+                // 소수점 다듬기 (선택 사항)
+                .totalCalories(Math.round(periodKcal * 10) / 10.0)
+                .totalCarbs(Math.round(periodCarbs * 10) / 10.0)
+                .totalProtein(Math.round(periodProtein * 10) / 10.0)
+                .totalFat(Math.round(periodFat * 10) / 10.0)
+                .dailyLogs(resultMap) // 여기에 상세 리스트 들어감
+                .build();
     }
 
     /**

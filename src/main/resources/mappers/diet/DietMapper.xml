@@ -8,6 +8,9 @@
         <id property="dietId" column="diet_id"/>
         <result property="userId" column="user_id"/>
         <result property="eatDate" column="eat_date"/>
+
+        <result property="time" column="eat_time"/>
+
         <result property="mealType" column="meal_type"/>
         <result property="dietImg" column="diet_img"/>
         <result property="memo" column="memo"/>
@@ -35,10 +38,10 @@
 
     <insert id="insertDiet" useGeneratedKeys="true" keyProperty="dietId"
             parameterType="com.ssafy.bapai.diet.dto.DietDto">
-        INSERT INTO diet (user_id, eat_date, meal_type, diet_img, memo,
+        INSERT INTO diet (user_id, eat_date, eat_time, meal_type, diet_img, memo,
                           total_kcal, total_carbs, total_protein, total_fat,
                           score, ai_analysis, created_at)
-        VALUES (#{userId}, #{eatDate}, #{mealType}, #{dietImg}, #{memo},
+        VALUES (#{userId}, #{eatDate}, #{time}, #{mealType}, #{dietImg}, #{memo},
                 #{totalKcal}, #{totalCarbs}, #{totalProtein}, #{totalFat},
                 #{score}, #{aiAnalysis}, NOW())
     </insert>
@@ -58,12 +61,33 @@
     </insert>
 
     <select id="selectDailyDiets" resultMap="DietResultMap">
-        SELECT d.*, dd.*
+        SELECT d.diet_id,
+               d.user_id,
+               d.eat_date,
+               d.eat_time,
+               d.meal_type,
+               d.diet_img,
+               d.memo,
+               d.total_kcal,
+               d.total_carbs,
+               d.total_protein,
+               d.total_fat,
+               d.score,
+               d.ai_analysis,
+            /* 상세 정보도 같이 가져와야 매핑됨 */
+               dd.detail_id,
+               dd.food_code,
+               dd.food_name,
+               dd.amount,
+               dd.kcal,
+               dd.carbs,
+               dd.protein,
+               dd.fat
         FROM diet d
                  LEFT JOIN diet_detail dd ON d.diet_id = dd.diet_id
         WHERE d.user_id = #{userId}
           AND d.eat_date = #{date}
-        ORDER BY d.meal_type ASC
+        ORDER BY d.eat_time ASC, d.diet_id ASC
     </select>
 
     <select id="selectWeeklyDiets" resultMap="DietResultMap">
@@ -101,13 +125,16 @@
 
     <update id="updateDiet">
         UPDATE diet
-        SET meal_type     = #{mealType},
+        SET eat_time      = #{time},
+            meal_type     = #{mealType},
+            diet_img      = #{dietImg},
             memo          = #{memo},
             total_kcal    = #{totalKcal},
-            diet_img      = #{dietImg},
             total_carbs   = #{totalCarbs},
             total_protein = #{totalProtein},
-            total_fat     = #{totalFat}
+            total_fat     = #{totalFat},
+            score         = #{score},
+            ai_analysis   = #{aiAnalysis}
         WHERE diet_id = #{dietId}
     </update>
 
@@ -180,12 +207,14 @@
         INSERT INTO daily_log (user_id, date, water_count, water_goal)
         VALUES (#{userId}, #{date}, GREATEST(0, 0 + #{delta}), 8) ON DUPLICATE KEY
         UPDATE
-            water_count = GREATEST(0, water_count + #{delta})     </insert>
+            water_count = GREATEST(0, water_count + #{delta})
+    </insert>
 
     <insert id="updateWaterGoalDelta">
         INSERT INTO daily_log (user_id, date, water_count, water_goal)
         VALUES (#{userId}, #{date}, 0, GREATEST(0, 8 + #{delta})) ON DUPLICATE KEY
         UPDATE
-            water_goal = GREATEST(0, water_goal + #{delta})       </insert>
+            water_goal = GREATEST(0, water_goal + #{delta})
+    </insert>
 
 </mapper>

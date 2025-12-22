@@ -11,11 +11,13 @@ public class DietDto {
     @Schema(description = "식단 ID (PK)", accessMode = Schema.AccessMode.READ_ONLY)
     private Long dietId;
 
-    @Schema(description = "회원 ID", hidden = true) // 토큰에서 뽑으니까 숨김
+    @Schema(description = "회원 ID", hidden = true)
     private Long userId;
 
     @Schema(description = "식사 날짜 (YYYY-MM-DD)", example = "2025-12-07")
     private String eatDate;
+    @Schema(description = "식사 시간")
+    private String time;
 
     @Schema(description = "식사 구분 (BREAKFAST, LUNCH, DINNER, SNACK)", example = "LUNCH")
     private String mealType;

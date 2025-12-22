@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  # 1. 백엔드 서버 (Spring Boot)
+  backend:
+    build: . # 현재 폴더의 Dockerfile로 빌드
+    container_name: bapai-server
+    ports:
+      - "8080:8080"
+    environment:
+      # DB 설정
+      - SPRING_DATASOURCE_URL=jdbc:mysql://yumyum-db.cdyc4s8smzoc.ap-northeast-2.rds.amazonaws.com:3306/bapai?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+      - SPRING_DATASOURCE_USERNAME=admin
+      - SPRING_DATASOURCE_PASSWORD=yumyumcoach
+      # Redis 설정 (컨테이너 이름으로 접속)
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+    depends_on:
+      - redis
+    networks:
+      - bapai-net
+
+  # 2. 캐시 서버 (Redis)
+  redis:
+    image: redis:alpine
+    container_name: bapai-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - bapai-net
+
+  # 3. 웹 서버 (Nginx) - 리버스 프록시
+  nginx:
+    image: nginx:latest
+    container_name: bapai-nginx
+    ports:
+      - "80:80"   # HTTP
+      - "443:443" # HTTPS
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d # 설정 파일 연결
+      - ./certbot/conf:/etc/letsencrypt  # SSL 인증서 연결
+      - ./certbot/www:/var/www/certbot   # 인증서 발급용
+    depends_on:
+      - backend
+    networks:
+      - bapai-net
+
+networks:
+  bapai-net:
+    driver: bridge
