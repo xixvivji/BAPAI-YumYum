@@ -1,3 +1,5 @@
+
+
 # 1. 빌드 단계 (Maven + Amazon Corretto JDK 17)
 # AWS에서 만든 안정적인 자바 버전으로 빌드합니다.
 FROM maven:3.9-amazoncorretto-17 AS builder

@@ -4,8 +4,11 @@ import com.ssafy.bapai.common.redis.RefreshToken;
 import com.ssafy.bapai.common.redis.RefreshTokenRepository;
 import com.ssafy.bapai.common.s3.S3Service;
 import com.ssafy.bapai.common.util.JwtUtil;
+import com.ssafy.bapai.group.service.GroupService;
 import com.ssafy.bapai.member.dto.MemberDto;
+import com.ssafy.bapai.member.dto.MemberGoalDto;
 import com.ssafy.bapai.member.service.EmailService;
+import com.ssafy.bapai.member.service.HealthService;
 import com.ssafy.bapai.member.service.MemberService;
 import com.ssafy.bapai.member.service.OAuthService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -15,6 +18,7 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,6 +27,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -43,7 +48,8 @@ public class MemberRestController {
     private final OAuthService oAuthService;
     private final S3Service s3Service;
     private final RefreshTokenRepository refreshTokenRepository;
-
+    private final HealthService healthService;
+    private final GroupService groupService;
     // =================================================================================
     // 1. 인증 & 가입 (Auth)
     // =================================================================================
@@ -79,15 +85,14 @@ public class MemberRestController {
 
         if (loginUser != null) {
             String accessToken =
-                    jwtUtil.createToken(loginUser.getUserId(), loginUser.getRole(), 1000 * 60 * 60);
-            long refreshTokenExpireTime = 1000L * 60 * 60 * 24 * 14;
-            String refreshToken = jwtUtil.createToken(loginUser.getUserId(), loginUser.getRole(),
-                    refreshTokenExpireTime);
+                    jwtUtil.createAccessToken(loginUser.getUserId(), loginUser.getRole());
+            String refreshToken =
+                    jwtUtil.createRefreshToken(loginUser.getUserId(), loginUser.getRole());
 
             RefreshToken redisToken = RefreshToken.builder()
                     .userId(String.valueOf(loginUser.getUserId()))
                     .token(refreshToken)
-                    .expiration(1209600L)
+                    .expiration(1209600L) // 14일
                     .build();
             refreshTokenRepository.save(redisToken);
 
@@ -135,18 +140,15 @@ public class MemberRestController {
 
             MemberDto member = memberService.socialLogin(email, name, provider, providerId);
 
-            String token =
-                    jwtUtil.createToken(member.getUserId(), member.getRole(), 1000 * 60 * 60);
-            String refreshToken = jwtUtil.createToken(member.getUserId(), member.getRole(),
-                    1000L * 60 * 60 * 24 * 14);
+            String token = jwtUtil.createAccessToken(member.getUserId(), member.getRole());
+            String refreshToken = jwtUtil.createRefreshToken(member.getUserId(), member.getRole());
 
             RefreshToken redisToken = RefreshToken.builder()
                     .userId(String.valueOf(member.getUserId()))
                     .token(refreshToken)
-                    .expiration(1209600L)
+                    .expiration(1209600L) // 14일 (초 단위)
                     .build();
             refreshTokenRepository.save(redisToken);
-
             Map<String, Object> result = new HashMap<>();
             result.put("accessToken", token);
             result.put("refreshToken", refreshToken);
@@ -170,33 +172,20 @@ public class MemberRestController {
             return ResponseEntity.ok(Map.of("message", "이미 로그아웃 상태입니다."));
         }
         try {
-            Long userId = jwtUtil.getUserId(token.substring(7));
-            memberService.logout(userId);
+            String accessToken = token.substring(7);
+            Long userId = jwtUtil.getUserId(accessToken);
+
+            // 1. Redis에서 Refresh Token 삭제
+            refreshTokenRepository.deleteById(String.valueOf(userId));
+
+            // 2. Access Token 블랙리스트 등록 (남은 시간만큼)
+            Long expiration = jwtUtil.getExpiration(accessToken);
+            memberService.registerBlacklist(userId, accessToken, expiration); // Service에 구현 필요
+
             return ResponseEntity.ok(Map.of("message", "로그아웃 성공"));
         } catch (Exception e) {
-            return ResponseEntity.ok(Map.of("message", "로그아웃 처리됨 (토큰 만료)"));
+            return ResponseEntity.ok(Map.of("message", "로그아웃 처리됨 (이미 만료됨)"));
         }
-    }
-
-    @Operation(summary = "토큰 재발급")
-    @PostMapping("/auth/refresh")
-    public ResponseEntity<?> refreshToken(@RequestBody Map<String, String> req) {
-        String refreshToken = req.get("refreshToken");
-        if (!jwtUtil.validateToken(refreshToken)) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "만료됨"));
-        }
-
-        Long userId = jwtUtil.getUserId("Bearer " + refreshToken);
-        RefreshToken storedToken =
-                refreshTokenRepository.findById(String.valueOf(userId)).orElse(null);
-
-        if (storedToken == null || !storedToken.getToken().equals(refreshToken)) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(Map.of("message", "유효하지 않음"));
-        }
-
-        String newAccessToken = jwtUtil.createToken(userId, "ROLE_USER", 1000 * 60 * 60);
-        return ResponseEntity.ok(Map.of("accessToken", newAccessToken));
     }
 
     // =================================================================================
@@ -379,7 +368,7 @@ public class MemberRestController {
 
         memberService.updateMember(member);
 
-        String newToken = jwtUtil.createToken(userId,
+        String newToken = jwtUtil.createAccessToken(userId,
                 member.getRole() != null ? member.getRole() : currentMember.getRole());
 
         return ResponseEntity.ok(Map.of("message", "수정 완료", "accessToken", newToken));
@@ -397,5 +386,94 @@ public class MemberRestController {
     @GetMapping("/members/options")
     public ResponseEntity<?> getHealthOptions() {
         return ResponseEntity.ok(memberService.getHealthOptions());
+    }
+
+    @Operation(summary = "내 건강정보 기반 목표 분석", description = "JWT로 내 정보를 조회한 뒤 BMR/TDEE 및 탄단지 권장량을 계산합니다.")
+    @GetMapping("/health/analyze/me")
+    public ResponseEntity<?> analyzeMyBody(@RequestHeader("Authorization") String token) {
+        Long userId = jwtUtil.getUserId(token.substring(7));
+
+        MemberDto member = memberService.getMember(userId);
+        if (member == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "회원 정보를 찾을 수 없습니다."));
+        }
+
+        if (member.getBirthYear() == null ||
+                member.getHeight() == null ||
+                member.getWeight() == null ||
+                member.getGender() == null) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "건강정보가 부족합니다. (birthYear/height/weight/gender 필수)",
+                    "isHealthInfoNeeded", true
+            ));
+        }
+
+        MemberGoalDto result = healthService.calculateHealthMetrics(member);
+        return ResponseEntity.ok(result);
+    }
+
+
+    @Operation(summary = "토큰 재발급 (RTR 적용)")
+    @PostMapping("/auth/refresh")
+    public ResponseEntity<?> refreshToken(@RequestBody Map<String, String> req) {
+        String oldRefreshToken = req.get("refreshToken");
+
+        // 1. 유효성 검증
+        if (oldRefreshToken == null || !jwtUtil.validateToken(oldRefreshToken)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("message", "리프레시 토큰이 만료되었거나 유효하지 않습니다."));
+        }
+
+        // 2. 사용자 식별 (Bearer prefix 처리 포함됨)
+        Long userId = jwtUtil.getUserId("Bearer " + oldRefreshToken);
+
+        // 3. Redis에 저장된 토큰과 대조 (보안 핵심: RTR)
+        RefreshToken storedToken =
+                refreshTokenRepository.findById(String.valueOf(userId)).orElse(null);
+
+        if (storedToken == null || !storedToken.getToken().equals(oldRefreshToken)) {
+            // [중요] 토큰 탈취 의심 상황: Redis에 저장된 토큰과 다른 토큰이 들어옴
+            // 이 경우 해당 유저의 모든 리프레시 토큰을 지워 강제 로그아웃 시키는 것이 안전합니다.
+            refreshTokenRepository.deleteById(String.valueOf(userId));
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("message", "토큰이 일치하지 않습니다. 다시 로그인해주세요."));
+        }
+
+        // 4. 새 토큰 세트 생성 (yml 설정값 활용)
+        MemberDto member = memberService.getMember(userId);
+        String newAccessToken = jwtUtil.createAccessToken(userId, member.getRole());
+        String newRefreshToken = jwtUtil.createRefreshToken(userId, member.getRole());
+
+        // 5. Redis 갱신 (기존 토큰 덮어쓰기)
+        // RefreshToken 엔티티의 @RedisHash 설정에 따라 유효기간이 관리됩니다.
+        RefreshToken nextToken = RefreshToken.builder()
+                .userId(String.valueOf(userId))
+                .token(newRefreshToken)
+                .expiration(1209600L) // 14일 (초 단위)
+                .build();
+        refreshTokenRepository.save(nextToken);
+
+        return ResponseEntity.ok(Map.of(
+                "accessToken", newAccessToken,
+                "refreshToken", newRefreshToken
+        ));
+    }
+
+
+    // 1. 그룹 멤버 목록 조회
+    @GetMapping("/groups/{groupId}/members")
+    @Operation(summary = "그룹 멤버 목록 조회")
+    public ResponseEntity<List<MemberDto>> getGroupMembers(@PathVariable Long groupId) {
+        return ResponseEntity.ok(groupService.getGroupMembers(groupId));
+    }
+
+    // 2. 초대할 사용자 검색 (닉네임 기준)
+    @GetMapping("/groups/{groupId}/search-users")
+    @Operation(summary = "초대할 사용자 검색", description = "그룹에 가입되지 않은 사용자 중 닉네임으로 검색합니다.")
+    public ResponseEntity<List<MemberDto>> searchUsers(
+            @PathVariable Long groupId,
+            @RequestParam String nickname) {
+        return ResponseEntity.ok(groupService.searchUsers(nickname, groupId));
     }
 }

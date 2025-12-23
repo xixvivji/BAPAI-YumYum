@@ -74,7 +74,7 @@
                d.total_fat,
                d.score,
                d.ai_analysis,
-            /* 상세 정보도 같이 가져와야 매핑됨 */
+        
                dd.detail_id,
                dd.food_code,
                dd.food_name,
@@ -91,7 +91,26 @@
     </select>
 
     <select id="selectWeeklyDiets" resultMap="DietResultMap">
-        SELECT d.*, dd.*
+        SELECT d.diet_id,
+               d.user_id,
+               d.eat_date,
+               d.eat_time,
+               d.meal_type,
+               d.memo,
+               d.total_kcal,
+               d.total_carbs,
+               d.total_protein,
+               d.total_fat,
+               d.score,
+               d.ai_analysis,
+               dd.detail_id,
+               dd.food_code,
+               dd.food_name,
+               dd.amount,
+               dd.kcal,
+               dd.carbs,
+               dd.protein,
+               dd.fat
         FROM diet d
                  LEFT JOIN diet_detail dd ON d.diet_id = dd.diet_id
         WHERE d.user_id = #{userId}
@@ -100,7 +119,26 @@
     </select>
 
     <select id="selectMonthlyDiets" resultMap="DietResultMap">
-        SELECT d.*, dd.*
+        SELECT d.diet_id,
+               d.user_id,
+               d.eat_date,
+               d.eat_time,
+               d.meal_type,
+               d.memo,
+               d.total_kcal,
+               d.total_carbs,
+               d.total_protein,
+               d.total_fat,
+               d.score,
+               d.ai_analysis,
+               dd.detail_id,
+               dd.food_code,
+               dd.food_name,
+               dd.amount,
+               dd.kcal,
+               dd.carbs,
+               dd.protein,
+               dd.fat
         FROM diet d
                  LEFT JOIN diet_detail dd ON d.diet_id = dd.diet_id
         WHERE d.user_id = #{userId}
@@ -109,7 +147,26 @@
     </select>
 
     <select id="selectAllDiets" resultMap="DietResultMap">
-        SELECT d.*, dd.*
+        SELECT d.diet_id,
+               d.user_id,
+               d.eat_date,
+               d.eat_time,
+               d.meal_type,
+               d.memo,
+               d.total_kcal,
+               d.total_carbs,
+               d.total_protein,
+               d.total_fat,
+               d.score,
+               d.ai_analysis,
+               dd.detail_id,
+               dd.food_code,
+               dd.food_name,
+               dd.amount,
+               dd.kcal,
+               dd.carbs,
+               dd.protein,
+               dd.fat
         FROM diet d
                  LEFT JOIN diet_detail dd ON d.diet_id = dd.diet_id
         WHERE d.user_id = #{userId}

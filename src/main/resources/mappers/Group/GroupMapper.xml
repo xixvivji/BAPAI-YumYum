@@ -14,31 +14,32 @@
     </insert>
 
     <select id="selectGroupList" resultType="com.ssafy.bapai.group.dto.GroupDto">
-        SELECT t.group_id,
-        t.owner_id,
-        t.name,
-        t.description,
-        t.max_member,
-        t.type,
-        t.created_at,
+        SELECT t.group_id, t.owner_id, t.name, t.description, t.max_member, t.type, t.created_at,
         m.nickname AS ownerName,
         (SELECT COUNT(*) FROM group_member gm WHERE gm.group_id = t.group_id) AS memberCount
         FROM `groups` t
         JOIN member m ON t.owner_id = m.user_id
         WHERE 1=1
-        <if test="keyword != null and keyword != ''">
-            AND (
-            t.name LIKE CONCAT('%', #{keyword}, '%')
-            OR EXISTS (
-            SELECT 1
+        <if test="keywordList != null and !keywordList.isEmpty()">
+            AND t.group_id IN (
+            SELECT gh.group_id
             FROM group_hashtags gh
-            JOIN hashtags h ON gh.tag_id = h.tag_id WHERE gh.group_id = t.group_id
-            AND h.name LIKE CONCAT('%', #{keyword}, '%')
-            )
+            JOIN hashtags h ON gh.tag_id = h.tag_id
+            WHERE h.name IN
+            <foreach collection="keywordList" item="kw" open="(" separator="," close=")">
+                #{kw}
+            </foreach>
+            GROUP BY gh.group_id
+            HAVING COUNT(DISTINCT h.name) = ${keywordList.size}
             )
         </if>
         ORDER BY t.created_at DESC
+        LIMIT #{limit} OFFSET #{offset}
     </select>
+    <insert id="insertInvite">
+        INSERT INTO group_member (group_id, user_id, role, joined_at)
+        VALUES (#{groupId}, #{userId}, 'MEMBER', NOW())
+    </insert>
 
     <select id="selectGroupDetail" resultType="com.ssafy.bapai.group.dto.GroupDto">
         SELECT t.group_id,
@@ -141,14 +142,33 @@
 
     <select id="selectMyGroups" resultType="com.ssafy.bapai.group.dto.GroupDto">
         SELECT g.group_id,
-               g.name                                                          as groupName,
+               g.owner_id,
+               g.name,
                g.description,
                g.img_url,
+               g.max_member,
+               g.type,
                g.created_at,
                (SELECT COUNT(*) FROM group_member WHERE group_id = g.group_id) as memberCount
         FROM `groups` g
                  JOIN group_member gm ON g.group_id = gm.group_id
         WHERE gm.user_id = #{userId}
-        ORDER BY g.created_at DESC
+    </select>
+
+    <select id="selectGroupMembers" resultType="com.ssafy.bapai.member.dto.MemberDto">
+        SELECT m.user_id as userId, m.nickname, m.img_url as imgUrl
+        FROM group_member gm
+                 JOIN member m ON gm.user_id = m.user_id
+        WHERE gm.group_id = #{groupId}
+    </select>
+
+    <select id="searchUsersByNickname" resultType="com.ssafy.bapai.member.dto.MemberDto">
+        SELECT user_id as userId, nickname, img_url as imgUrl
+        FROM member
+        WHERE nickname LIKE CONCAT('%', #{nickname}, '%')
+          AND user_id NOT IN (
+            SELECT user_id FROM group_member WHERE group_id = #{groupId}
+            )
+        LIMIT 10
     </select>
 </mapper>

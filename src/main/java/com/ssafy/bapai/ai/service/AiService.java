@@ -19,6 +19,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import javax.imageio.ImageIO;
 import lombok.extern.slf4j.Slf4j;
@@ -38,6 +39,15 @@ import org.springframework.web.multipart.MultipartFile;
 @Slf4j
 @Service
 public class AiService {
+
+    // ✅ 프롬프트/리소스 방어용 상수
+    private static final int MAX_PROMPT_TEXT_LEN = 800;
+    private static final int MAX_LIST_ITEMS = 50;
+    private static final long MAX_IMAGE_PIXELS = 4096L * 4096L; // DoS 완화용(약 16MP)
+
+    private static final String FALLBACK_REPORT_MSG = "리포트 생성에 실패했습니다. 잠시 후 다시 시도해주세요.";
+    private static final String FALLBACK_RECOMMEND_MSG = "추천 생성에 실패했습니다. 잠시 후 다시 시도해주세요.";
+    private static final String FALLBACK_GAP_MSG = "비교 분석 생성에 실패했습니다. 잠시 후 다시 시도해주세요.";
 
     private final ObjectMapper objectMapper;
     private final ReportDao reportDao;
@@ -60,35 +70,71 @@ public class AiService {
         this.chatModel = chatModel;
     }
 
+    // -----------------------------
+    // ✅ 공통 방어 유틸
+    // -----------------------------
+    private String sanitizeForPrompt(String input) {
+        if (input == null) {
+            return "";
+        }
+        String s = input.replaceAll("\\p{Cntrl}", " ").trim();
+        if (s.length() > MAX_PROMPT_TEXT_LEN) {
+            s = s.substring(0, MAX_PROMPT_TEXT_LEN) + "...";
+        }
+        // 아주 단순한 인젝션 완화(완벽 X)
+        s = s.replaceAll("(?i)ignore (all|previous) instructions", "[filtered]");
+        s = s.replaceAll("(?i)system prompt", "[filtered]");
+        s = s.replaceAll("(?i)developer message", "[filtered]");
+        return s;
+    }
+
+    private String safeAiCall(String purpose, Supplier<String> supplier, String fallback) {
+        try {
+            String res = supplier.get();
+            if (res == null || res.isBlank()) {
+                return fallback;
+            }
+            return res;
+        } catch (Exception e) {
+            log.error("AI call failed. purpose={}, err={}", purpose, e.getMessage(), e);
+            return fallback;
+        }
+    }
+
     /**
-     * 1. 음식 분석 (가장 중요)
-     * - 프롬프트 강화 + 응답 클리닝 + 예외 처리 적용
+     * 1. 음식 분석
+     * - content-type 검사
+     * - 이미지 픽셀 상한 검사
+     * - 예외 시 fallback JSON
      */
     public String analyzeFood(MultipartFile file, String foodName) {
-        // 에러 발생 시 반환할 안전한 기본값
         String fallbackJson = createDefaultJson();
 
         try {
-            // ★ [안전장치 1] 힌트 유효성 검사 (숫자, 특수문자만 있거나 너무 짧으면 무시)
-            String userHint = "";
-            if (foodName != null && !foodName.isBlank()) {
-                // 한글/영어가 하나도 없이 숫자나 특수문자만 있는지 정규식으로 검사
-                boolean isGarbage =
-                        foodName.matches("^[0-9\\s!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>/?`~]+$");
-
-                if (!isGarbage) {
-                    // 유효한 힌트일 때만 프롬프트에 추가
-                    userHint = " (사용자가 제공한 힌트: '" + foodName + "'. 단, 이 힌트가 사진과 명확히 다르다면 무시하세요.)";
+            // ✅ 이미지 파일 여부 1차 검사
+            if (file != null && !file.isEmpty()) {
+                String ct = file.getContentType();
+                if (ct == null || !ct.startsWith("image/")) {
+                    return fallbackJson;
                 }
             }
 
-            // ★ [안전장치 2] 프롬프트 강화: 사진 우선 원칙 명시
+            String userHint = "";
+            if (foodName != null && !foodName.isBlank()) {
+                boolean isGarbage =
+                        foodName.matches("^[0-9\\s!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>/?`~]+$");
+                if (!isGarbage) {
+                    userHint = " (사용자가 제공한 힌트: '" + sanitizeForPrompt(foodName)
+                            + "'. 단, 이 힌트가 사진과 명확히 다르다면 무시하세요.)";
+                }
+            }
+
             String systemInstruction = """
                     당신은 전문 영양사입니다. 음식 사진을 분석하여 영양 정보를 추정하세요.
                     
                     [분석 규칙]
-                    1. 사용자의 힌트가 있더라도, **사진 속 음식과 다르면 사진을 최우선으로 분석**하세요.
-                    2. 음식 이름은 반드시 한국인이 흔히 쓰는 **한글 명칭**으로 작성하세요. (예: 'Kimchi Stew' -> '김치찌개')
+                    1. 사용자의 힌트가 있더라도, 사진 속 음식과 다르면 사진을 최우선으로 분석하세요.
+                    2. 음식 이름은 반드시 한국인이 흔히 쓰는 한글 명칭으로 작성하세요.
                     3. 응답은 오직 아래 JSON 포맷으로만 작성하세요. 마크다운이나 잡담 금지.
                     
                     [JSON 응답 예시]
@@ -105,23 +151,19 @@ public class AiService {
 
             String aiResponseRaw;
 
-            // 1. 이미지 분석 요청
             if (file != null && !file.isEmpty()) {
                 byte[] compressedImage = compressImage(file);
                 Resource imageResource = new ByteArrayResource(compressedImage);
 
                 String promptText = "이 음식 사진을 분석해줘." + userHint + "\n" + systemInstruction;
-
                 var userMessage = new UserMessage(
                         promptText,
                         List.of(new Media(MimeTypeUtils.IMAGE_JPEG, imageResource))
                 );
+
                 aiResponseRaw =
                         chatModel.call(new Prompt(userMessage)).getResult().getOutput().getText();
-            }
-            // 2. 텍스트 분석 요청 (이미지 없을 때)
-            else {
-                // 이미지가 없는데 힌트까지 이상하면("1234") -> 기본값 리턴이 나음
+            } else {
                 if (userHint.isBlank()) {
                     return fallbackJson;
                 }
@@ -131,19 +173,16 @@ public class AiService {
                         chatModel.call(new Prompt(promptText)).getResult().getOutput().getText();
             }
 
-            // 후처리 (JSON 클리닝 및 검증)
             String cleanJson = cleanJsonOutput(aiResponseRaw);
-            objectMapper.readTree(cleanJson); // 파싱 테스트
-
+            objectMapper.readTree(cleanJson);
             return cleanJson;
 
         } catch (Exception e) {
-            log.error("AI 분석 실패: {}", e.getMessage());
+            log.error("AI analyzeFood failed: {}", e.getMessage(), e);
             return fallbackJson;
         }
     }
 
-    // --- 헬퍼 메서드: JSON 클리닝 ---
     private String cleanJsonOutput(String text) {
         if (text == null) {
             return "{}";
@@ -155,7 +194,6 @@ public class AiService {
                 .trim();
     }
 
-    // --- 헬퍼 메서드: 기본 JSON 생성 (에러 방지용) ---
     private String createDefaultJson() {
         ObjectNode root = objectMapper.createObjectNode();
         root.put("foodName", "분석 실패 (직접 입력해주세요)");
@@ -168,30 +206,30 @@ public class AiService {
         return root.toString();
     }
 
-    // ---------------------------------------------------------
-    // 아래는 기존 로직 유지 (이미지 압축, 리포트 등)
-    // ---------------------------------------------------------
-
     private byte[] compressImage(MultipartFile file) throws IOException {
         BufferedImage originalImage = ImageIO.read(file.getInputStream());
         if (originalImage == null) {
             throw new IllegalArgumentException("이미지 파일이 아닙니다.");
         }
 
-        int targetWidth = 512; // 512px면 AI 인식에 충분함
+        // ✅ 픽셀 수 상한 (초고해상도 DoS 완화)
+        long pixels = (long) originalImage.getWidth() * (long) originalImage.getHeight();
+        if (pixels > MAX_IMAGE_PIXELS) {
+            throw new IllegalArgumentException("이미지 해상도가 너무 큽니다.");
+        }
+
+        int targetWidth = 512;
         int originalWidth = originalImage.getWidth();
         int originalHeight = originalImage.getHeight();
 
         if (originalWidth <= targetWidth) {
             targetWidth = originalWidth;
         }
-
         int targetHeight = (int) ((double) targetWidth / originalWidth * originalHeight);
 
         BufferedImage resizedImage =
                 new BufferedImage(targetWidth, targetHeight, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = resizedImage.createGraphics();
-
         g.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
                 RenderingHints.VALUE_INTERPOLATION_BILINEAR);
         g.drawImage(originalImage, 0, 0, targetWidth, targetHeight, null);
@@ -202,32 +240,42 @@ public class AiService {
         return outputStream.toByteArray();
     }
 
-    // 2. 다음 끼니 추천
+    // 2) 다음 끼니 추천 (✅ 500 방지 + 토큰 방어)
     public String recommendNextMeal(Long userId) {
         String today = LocalDate.now().toString();
         List<DietDto> logs = dietDao.selectDailyDiets(userId, today);
+
         String prompt;
-        if (logs.isEmpty()) {
+        if (logs == null || logs.isEmpty()) {
             prompt = "오늘 기록된 식사가 없어. 가볍고 건강한 메뉴 3가지를 추천해줘.";
         } else {
             StringBuilder sb = new StringBuilder();
-            for (DietDto log : logs) {
+            int limit = Math.min(logs.size(), MAX_LIST_ITEMS);
+            for (int i = 0; i < limit; i++) {
+                DietDto log = logs.get(i);
                 String menuName =
                         (log.getMemo() != null && !log.getMemo().isEmpty()) ? log.getMemo() :
                                 log.getMealType();
-                sb.append(menuName).append("(").append(log.getTotalKcal()).append("kcal), ");
+                menuName = sanitizeForPrompt(menuName);
+                double kcal = (log.getTotalKcal() != null) ? log.getTotalKcal() : 0.0;
+                sb.append(menuName).append("(").append((int) kcal).append("kcal), ");
             }
-            prompt = "오늘 먹은 음식: " + sb.toString() + ". 부족한 영양소를 추측해서 다음 끼니 메뉴 3가지를 추천해줘.";
+            prompt = "오늘 먹은 음식: " + sb + ". 부족한 영양소를 추측해서 다음 끼니 메뉴 3가지를 추천해줘.";
         }
-        return visionClient.prompt().user(prompt).call().content();
+
+        String finalPrompt = sanitizeForPrompt(prompt);
+        return safeAiCall("recommendNextMeal",
+                () -> visionClient.prompt().user(finalPrompt).call().content(),
+                FALLBACK_RECOMMEND_MSG);
     }
 
-    // 3. 일간 리포트
+    // 3) 일간 리포트 (✅ 500 방지)
     @Transactional
     public AiReportResponse getDailyReport(Long userId, String date) {
         if (date == null) {
             date = LocalDate.now().toString();
         }
+
         List<DietDto> dailyLogs = dietDao.selectDailyDiets(userId, date);
         ReportLogDto cachedLog = reportDao.selectExistingReport(userId, "DAILY", date, date);
 
@@ -238,22 +286,31 @@ public class AiService {
         }
 
         String aiMessage;
-        if (dailyLogs.isEmpty()) {
+        if (dailyLogs == null || dailyLogs.isEmpty()) {
             aiMessage = "기록된 식단이 없습니다. 오늘의 식사를 기록해보세요!";
         } else {
             StringBuilder sb = new StringBuilder("오늘 식단 리스트:\n");
             double totalKcal = 0;
-            for (DietDto d : dailyLogs) {
-                String menuName = (d.getMemo() != null) ? d.getMemo() : d.getMealType();
+
+            int limit = Math.min(dailyLogs.size(), MAX_LIST_ITEMS);
+            for (int i = 0; i < limit; i++) {
+                DietDto d = dailyLogs.get(i);
+                String menuName = (d.getMemo() != null && !d.getMemo().isEmpty()) ? d.getMemo() :
+                        d.getMealType();
+                menuName = sanitizeForPrompt(menuName);
+
                 double kcal = (d.getTotalKcal() != null) ? d.getTotalKcal() : 0.0;
-                sb.append("- ").append(menuName).append(" (").append(kcal).append("kcal)\n");
+                sb.append("- ").append(menuName).append(" (").append((int) kcal).append("kcal)\n");
                 totalKcal += kcal;
             }
-            String prompt = sb.toString() + "\n총 " + totalKcal + "kcal. 영양 균형 조언 3줄 요약해줘.";
-            aiMessage = visionClient.prompt().user(prompt).call().content();
+
+            String prompt = sb + "\n총 " + (int) totalKcal + "kcal. 영양 균형 조언 3줄 요약해줘.";
+            aiMessage = safeAiCall("dailyReport",
+                    () -> visionClient.prompt().user(sanitizeForPrompt(prompt)).call().content(),
+                    FALLBACK_REPORT_MSG);
         }
 
-        if (!dailyLogs.isEmpty()) {
+        if (dailyLogs != null && !dailyLogs.isEmpty()) {
             reportDao.insertReportLog(ReportLogDto.builder()
                     .userId(userId).reportType("DAILY").startDate(date).endDate(date)
                     .scoreAverage(0.0).aiMessage(aiMessage).build());
@@ -263,8 +320,8 @@ public class AiService {
                 .type("DAILY").dateRange(date).dailyMeals(dailyLogs)
                 .aiAnalysis(aiMessage).build();
     }
+    
 
-    // 4. 주간/월간 리포트
     @Transactional
     public AiReportResponse getPeriodReport(Long userId, String type) {
         LocalDate end = LocalDate.now();
@@ -273,7 +330,8 @@ public class AiService {
         String eDate = end.toString();
 
         ReportLogDto cachedLog = reportDao.selectExistingReport(userId, type, sDate, eDate);
-        if (cachedLog != null) {
+
+        if (cachedLog != null && !isFallbackMessage(cachedLog.getAiMessage())) {
             return AiReportResponse.builder()
                     .type(type).dateRange(sDate + " ~ " + eDate)
                     .averageScore(cachedLog.getScoreAverage())
@@ -281,39 +339,76 @@ public class AiService {
         }
 
         List<DietDto> logs = dietDao.selectWeeklyDiets(userId, sDate, eDate);
-        List<Integer> scores = logs.stream().map(DietDto::getScore)
-                .filter(s -> s != null && s > 0).collect(Collectors.toList());
+        List<Integer> scores = (logs == null ? List.<DietDto>of() : logs).stream()
+                .map(DietDto::getScore)
+                .filter(s -> s != null && s > 0)
+                .collect(Collectors.toList());
+
+        if (logs == null || logs.isEmpty() || scores.isEmpty()) {
+            String msg = type.equals("WEEKLY")
+                    ? "최근 1주일간 기록이 없어 주간 분석을 생성할 수 없습니다. 식단을 기록해보세요!"
+                    : "최근 1개월간 기록이 없어 월간 분석을 생성할 수 없습니다. 식단을 기록해보세요!";
+
+            return AiReportResponse.builder()
+                    .type(type)
+                    .dateRange(sDate + " ~ " + eDate)
+                    .averageScore(0.0)
+                    .scoreTrend(scores)
+                    .aiAnalysis(msg)
+                    .build();
+        }
+
         double avgScore = scores.stream().mapToInt(Integer::intValue).average().orElse(0.0);
         avgScore = Math.round(avgScore * 10) / 10.0;
 
         String periodName = type.equals("WEEKLY") ? "지난 1주" : "지난 1달";
-        String prompt = String.format("%s 동안 평균 %.1f점. 점수 리스트: %s. 추세 분석 및 심층 조언해줘.",
+
+        String prompt = """
+                너는 식단 점수 데이터를 기반으로 %s 리포트를 작성하는 코치다.
+                
+                [규칙]
+                - 점수리스트에 근거해서만 말해라. 과장/추측 금지.
+                - 6~10줄 이내 한국어로만 작성.
+                - 제목/마크다운/코드블록/이모지 금지.
+                
+                [입력]
+                기간: %s
+                평균점수: %.1f
+                점수리스트: %s
+                """.formatted(type.equals("WEEKLY") ? "주간" : "월간",
                 periodName, avgScore, scores.toString());
 
-        String aiMessage = reportClient.prompt().user(prompt).call().content();
+        String aiMessage = safeAiCall("periodReport",
+                () -> reportClient.prompt().user(sanitizeForPrompt(prompt)).call().content(),
+                FALLBACK_REPORT_MSG);
 
-        reportDao.insertReportLog(ReportLogDto.builder()
-                .userId(userId).reportType(type).startDate(sDate).endDate(eDate)
-                .scoreAverage(avgScore).aiMessage(aiMessage).build());
+        if (!isFallbackMessage(aiMessage)) {
+            reportDao.insertReportLog(ReportLogDto.builder()
+                    .userId(userId).reportType(type).startDate(sDate).endDate(eDate)
+                    .scoreAverage(avgScore).aiMessage(aiMessage).build());
+        }
 
         return AiReportResponse.builder()
                 .type(type).dateRange(sDate + " ~ " + eDate)
                 .averageScore(avgScore).scoreTrend(scores).aiAnalysis(aiMessage).build();
     }
 
-    // 5. 챌린지 추천
+    // 5) 챌린지 추천 (✅ AI/파싱 실패 안전화)
     public List<ChallengePresetDto> recommendGroupChallenges(List<String> keywords) {
         String keywordStr =
-                (keywords == null || keywords.isEmpty()) ? "건강, 운동" : String.join(", ", keywords);
+                (keywords == null || keywords.isEmpty()) ? "건강, 운동" :
+                        sanitizeForPrompt(String.join(", ", keywords));
+
         String prompt = """
                 주제: [%s]. 그룹 챌린지 주제 3가지를 추천해줘.
                 응답은 오직 JSON 배열 포맷으로만:
                 [{"title":"제목","content":"내용","goalType":"COUNT","targetCount":5,"keyword":"키워드"}]
                 """.formatted(keywordStr);
 
-        String jsonResult = visionClient.prompt().user(prompt).call().content();
+        String jsonResult = safeAiCall("recommendChallenges",
+                () -> visionClient.prompt().user(prompt).call().content(),
+                "[]");
 
-        // ★ 여기도 방어 로직 적용 (마크다운 제거)
         jsonResult = cleanJsonOutput(jsonResult);
 
         try {
@@ -321,12 +416,12 @@ public class AiService {
                     objectMapper.readValue(jsonResult, ChallengePresetDto[].class);
             return Arrays.asList(array);
         } catch (Exception e) {
-            log.error("챌린지 추천 파싱 실패", e);
+            log.error("Challenge recommend parse failed: {}", e.getMessage(), e);
             return Collections.emptyList();
         }
     }
 
-    // 6. Gap Analysis
+    // 6) Gap Analysis (✅ 500 방지)
     @Transactional
     public GapReportDto getGapAnalysis(Long userId, Long groupId, String type) {
         LocalDate end = LocalDate.now();
@@ -354,10 +449,14 @@ public class AiService {
             } else {
                 String prompt = String.format(
                         "나(평균 %.1f점, %.0fkcal) vs 랭커(평균 %.1f점, %.0fkcal) vs 목표(%.0fkcal). " +
-                                "내가 부족한 점과 잘한 점을 냉철하게 비교 분석하고 동기부여해줘. 3줄 요약.",
+                                "내가 부족한 점과 잘한 점을 비교 분석하고 동기부여해줘. 3줄 요약.",
                         myScore, myKcal, rankerScore, rankerKcal, goalKcal
                 );
-                aiMessage = reportClient.prompt().user(prompt).call().content();
+
+                aiMessage = safeAiCall("gapAnalysis",
+                        () -> reportClient.prompt().user(sanitizeForPrompt(prompt)).call()
+                                .content(),
+                        FALLBACK_GAP_MSG);
 
                 reportDao.insertReportLog(ReportLogDto.builder()
                         .userId(userId).reportType("GAP_ANALYSIS").startDate(sDate).endDate(eDate)
@@ -376,5 +475,14 @@ public class AiService {
             return 0.0;
         }
         return ((Number) map.get(key)).doubleValue();
+    }
+
+    private boolean isFallbackMessage(String msg) {
+        if (msg == null) {
+            return false;
+        }
+        return msg.equals(FALLBACK_REPORT_MSG)
+                || msg.equals(FALLBACK_RECOMMEND_MSG)
+                || msg.equals(FALLBACK_GAP_MSG);
     }
 }
