@@ -1,5 +1,6 @@
 package com.ssafy.bapai.ai.config;
 
+import java.time.Duration;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.openai.OpenAiChatModel;
@@ -29,27 +30,36 @@ public class AiConfiguration {
     @Value("${spring.ai.google.genai.base-url}")
     private String googleUrl;
 
-    // GMS 400 에러 해결을 위한 버퍼링 빌더
+    // ✅ 모델명 외부화(운영에서 바꾸기 쉽게)
+    @Value("${app.ai.vision.model:gpt-4o}")
+    private String visionModelName;
+
+    @Value("${app.ai.report.model:gpt-5}")
+    private String reportModelName;
+
+    // ✅ GMS 400/파싱 이슈 추적에 도움 + 타임아웃 추가
     @Bean
     public RestClient.Builder restClientBuilder() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(Duration.ofSeconds(5));
+        factory.setReadTimeout(Duration.ofSeconds(30));
+
         return RestClient.builder()
-                .requestFactory(new BufferingClientHttpRequestFactory(
-                        new SimpleClientHttpRequestFactory()));
+                .requestFactory(new BufferingClientHttpRequestFactory(factory));
     }
 
-    // 1. [Vision용] GPT-4o-mini
+    // 1) Vision (멀티모달)
     @Bean(name = "visionChatModel")
     @Primary
     public ChatModel visionChatModel(RestClient.Builder restClientBuilder) {
-        // ★ [수정] 생성자 대신 Builder 패턴 사용 (M6 버전 이상 권장)
         OpenAiApi api = OpenAiApi.builder()
                 .baseUrl(openAiUrl)
                 .apiKey(openAiKey)
-                .restClientBuilder(restClientBuilder) // 버퍼링 설정 주입
+                .restClientBuilder(restClientBuilder)
                 .build();
 
         return new OpenAiChatModel(api, OpenAiChatOptions.builder()
-                .model("gpt-4o-mini")
+                .model(visionModelName) // ✅ 기본 gpt-4o
                 .temperature(0.3)
                 .build());
     }
@@ -59,18 +69,17 @@ public class AiConfiguration {
         return ChatClient.create(model);
     }
 
-    // 2. [Report용] Gemini-2.5-Pro
+    // 2) Report (텍스트 고급)
     @Bean(name = "reportChatModel")
     public ChatModel reportChatModel(RestClient.Builder restClientBuilder) {
-        // ★ [수정] 생성자 대신 Builder 패턴 사용
         OpenAiApi api = OpenAiApi.builder()
-                .baseUrl(googleUrl)
+                .baseUrl(googleUrl)   // ✅ GMS(OpenAI 호환) 엔드포인트로 사용 중인 것으로 보임
                 .apiKey(googleKey)
-                .restClientBuilder(restClientBuilder) // 버퍼링 설정 주입
+                .restClientBuilder(restClientBuilder)
                 .build();
 
         return new OpenAiChatModel(api, OpenAiChatOptions.builder()
-                .model("gpt-4o-mini")
+                .model(reportModelName) // ✅ 기본 gpt-5 (지원 안 되면 gpt-4.1로 변경)
                 .temperature(0.7)
                 .build());
     }
