@@ -41,13 +41,16 @@ public class GroupController {
         return ResponseEntity.ok(Map.of("message", "모임이 생성되었습니다."));
     }
 
+
     @GetMapping
-    @Operation(summary = "모임 목록 조회")
+    @Operation(summary = "모임 목록 조회 (페이지네이션)")
     public ResponseEntity<List<GroupDto>> list(
             @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "1") int page, // 페이지 번호
+            @RequestParam(defaultValue = "12") int size, // 페이지 당 개수
             @RequestHeader(value = "Authorization", required = false) String token) {
         Long userId = (token != null) ? jwtUtil.getUserId(token.substring(7)) : null;
-        return ResponseEntity.ok(groupService.getList(keyword, userId));
+        return ResponseEntity.ok(groupService.getList(keyword, page, size, userId));
     }
 
     @GetMapping("/{groupId}")
@@ -115,5 +118,16 @@ public class GroupController {
             @Parameter(hidden = true) @RequestHeader("Authorization") String token) {
         Long userId = jwtUtil.getUserId(token.substring(7));
         return ResponseEntity.ok(groupService.getMyGroups(userId));
+    }
+
+    @PostMapping("/{groupId}/invite/{targetUserId}")
+    @Operation(summary = "멤버 초대하기")
+    public ResponseEntity<?> invite(
+            @PathVariable Long groupId,
+            @PathVariable Long targetUserId,
+            @RequestHeader("Authorization") String token) {
+        Long ownerId = jwtUtil.getUserId(token.substring(7));
+        groupService.inviteMember(groupId, ownerId, targetUserId); // API 추가
+        return ResponseEntity.ok(Map.of("message", "사용자를 초대하였습니다."));
     }
 }

@@ -24,20 +24,20 @@ public class AiConfiguration {
     @Value("${spring.ai.openai.base-url}")
     private String openAiUrl;
 
-    @Value("${spring.ai.google.genai.api-key}")
-    private String googleKey;
+    // ✅ 모델/온도: 환경변수로 스위치 가능
+    @Value("${APP_AI_VISION_MODEL:gpt-4o}")
+    private String visionModel;
 
-    @Value("${spring.ai.google.genai.base-url}")
-    private String googleUrl;
+    @Value("${APP_AI_VISION_TEMPERATURE:0.3}")
+    private Double visionTemp;
 
-    // ✅ 모델명 외부화(운영에서 바꾸기 쉽게)
-    @Value("${app.ai.vision.model:gpt-4o}")
-    private String visionModelName;
+    @Value("${APP_AI_REPORT_MODEL:gpt-5}")
+    private String reportModel;
 
-    @Value("${app.ai.report.model:gpt-5}")
-    private String reportModelName;
+    @Value("${APP_AI_REPORT_TEMPERATURE:0.7}")
+    private Double reportTemp;
 
-    // ✅ GMS 400/파싱 이슈 추적에 도움 + 타임아웃 추가
+    // ✅ 네트워크 무한대기 방지(장애 시 스레드 고갈/지연 방지)
     @Bean
     public RestClient.Builder restClientBuilder() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
@@ -48,7 +48,7 @@ public class AiConfiguration {
                 .requestFactory(new BufferingClientHttpRequestFactory(factory));
     }
 
-    // 1) Vision (멀티모달)
+    // 1) Vision (이미지 분석/가벼운 추천)
     @Bean(name = "visionChatModel")
     @Primary
     public ChatModel visionChatModel(RestClient.Builder restClientBuilder) {
@@ -59,8 +59,8 @@ public class AiConfiguration {
                 .build();
 
         return new OpenAiChatModel(api, OpenAiChatOptions.builder()
-                .model(visionModelName) // ✅ 기본 gpt-4o
-                .temperature(0.3)
+                .model(visionModel)
+                .temperature(visionTemp)
                 .build());
     }
 
@@ -69,18 +69,18 @@ public class AiConfiguration {
         return ChatClient.create(model);
     }
 
-    // 2) Report (텍스트 고급)
+    // 2) Report (주간/월간/갭 등 고급 텍스트)
     @Bean(name = "reportChatModel")
     public ChatModel reportChatModel(RestClient.Builder restClientBuilder) {
         OpenAiApi api = OpenAiApi.builder()
-                .baseUrl(googleUrl)   // ✅ GMS(OpenAI 호환) 엔드포인트로 사용 중인 것으로 보임
-                .apiKey(googleKey)
+                .baseUrl(openAiUrl) // ✅ 둘 다 OpenAI 호환 GMS로 통일
+                .apiKey(openAiKey)
                 .restClientBuilder(restClientBuilder)
                 .build();
 
         return new OpenAiChatModel(api, OpenAiChatOptions.builder()
-                .model(reportModelName) // ✅ 기본 gpt-5 (지원 안 되면 gpt-4.1로 변경)
-                .temperature(0.7)
+                .model(reportModel) // ✅ 기본 gpt-5 (미지원/불안정하면 gpt-4.1로 env 변경)
+                .temperature(reportTemp)
                 .build());
     }
 

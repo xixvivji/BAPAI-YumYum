@@ -3,6 +3,7 @@ package com.ssafy.bapai.group.service;
 import com.ssafy.bapai.group.dao.GroupDao;
 import com.ssafy.bapai.group.dto.GroupDto;
 import com.ssafy.bapai.group.dto.GroupRankDto;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -54,35 +55,41 @@ public class GroupServiceImpl implements GroupService {
     }
 
     @Override
-    public List<GroupDto> getList(String keyword, Long userId) {
+    public List<GroupDto> getList(String keyword, int page, int size, Long userId) {
         Map<String, Object> params = new HashMap<>();
-        params.put("keyword", keyword);
+
+        // 페이지네이션 계산
+        int offset = (page - 1) * size;
+        params.put("limit", size);
+        params.put("offset", offset);
+
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            params.put("keywordList", Arrays.asList(keyword.split("[\\s,]+")));
+        }
+
         List<GroupDto> list = groupDao.selectGroupList(params);
 
         for (GroupDto g : list) {
             g.setTags(groupDao.selectGroupTags(g.getGroupId()));
-
             if (userId != null) {
-                String myRole = groupDao.selectMyRole(g.getGroupId(), userId);
-                if (myRole != null) {
-                    g.setJoined(true);
-                    g.setMyRole(myRole);
-                }
+                // 가입 여부 체크
+                g.setJoined(groupDao.checkJoined(g.getGroupId(), userId) > 0);
+                // 방장 여부 체크: ownerId와 로그인한 userId 비교
+                g.setOwner(g.getOwnerId().equals(userId));
             }
         }
         return list;
     }
 
+
     @Override
     public GroupDto getDetail(Long groupId, Long userId) {
         GroupDto group = groupDao.selectGroupDetail(groupId);
-        group.setTags(groupDao.selectGroupTags(groupId));
-
-        if (userId != null) {
-            String myRole = groupDao.selectMyRole(groupId, userId);
-            if (myRole != null) {
-                group.setJoined(true);
-                group.setMyRole(myRole);
+        if (group != null) {
+            group.setTags(groupDao.selectGroupTags(groupId));
+            if (userId != null) {
+                group.setJoined(groupDao.checkJoined(groupId, userId) > 0);
+                group.setOwner(group.getOwnerId().equals(userId));
             }
         }
         return group;
@@ -91,10 +98,16 @@ public class GroupServiceImpl implements GroupService {
     @Override
     @Transactional
     public void joinGroup(Long groupId, Long userId) {
+        GroupDto group = groupDao.selectGroupDetail(groupId);
+        if ("PRIVATE".equals(group.getType())) {
+            // 비공개일 경우 가입 신청 테이블(별도 필요)에 넣거나 로직 처리
+            // 여기서는 비공개 시 즉시 가입을 막는 예시만 작성
+            throw new IllegalStateException("비공개 모임은 관리자(그룹장)의 승인이 필요합니다.");
+        }
         if (groupDao.checkJoined(groupId, userId) > 0) {
             throw new IllegalStateException("이미 가입했습니다.");
         }
-        GroupDto group = groupDao.selectGroupDetail(groupId);
+
         if (groupDao.countMembers(groupId) >= group.getMaxMember()) {
             throw new IllegalStateException("정원 초과입니다.");
         }
@@ -103,9 +116,10 @@ public class GroupServiceImpl implements GroupService {
 
     @Override
     public void leaveGroup(Long groupId, Long userId) {
-        String myRole = groupDao.selectMyRole(groupId, userId);
-        if ("LEADER".equals(myRole) && groupDao.countMembers(groupId) > 1) {
-            throw new IllegalStateException("방장은 탈퇴 불가. 위임하거나 모임을 삭제하세요.");
+        // 내부 로직에서는 여전히 DB의 role(LEADER)을 체크하여 그룹장 탈퇴를 막음
+        String role = groupDao.selectMyRole(groupId, userId);
+        if ("LEADER".equals(role)) {
+            throw new IllegalStateException("그룹장은 탈퇴할 수 없습니다. 권한을 위임하세요.");
         }
         groupDao.deleteGroupMember(groupId, userId);
     }
@@ -146,6 +160,28 @@ public class GroupServiceImpl implements GroupService {
 
     @Override
     public List<GroupDto> getMyGroups(Long userId) {
-        return groupDao.selectMyGroups(userId);
+        List<GroupDto> list = groupDao.selectMyGroups(userId);
+        for (GroupDto g : list) {
+            g.setTags(groupDao.selectGroupTags(g.getGroupId()));
+            // 내 그룹 목록이므로 가입은 무조건 true, 방장 여부만 계산
+            g.setJoined(true);
+            g.setOwner(g.getOwnerId().equals(userId));
+        }
+        return list;
+    }
+
+    @Override
+    @Transactional
+    public void inviteMember(Long groupId, Long ownerId, Long targetUserId) {
+        // 방장만 초대 가능 여부 확인
+        GroupDto group = groupDao.selectGroupDetail(groupId);
+        if (!group.getOwnerId().equals(ownerId)) {
+            throw new IllegalStateException("초대 권한이 없습니다.");
+        }
+        // 이미 가입했는지 확인
+        if (groupDao.checkJoined(groupId, targetUserId) > 0) {
+            throw new IllegalStateException("이미 가입된 사용자입니다.");
+        }
+        groupDao.insertGroupMember(groupId, targetUserId, "MEMBER");
     }
 }
