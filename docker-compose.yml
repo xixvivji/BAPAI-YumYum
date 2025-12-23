@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   backend:
-    build: .
+    image: ghcr.io/xixvivji/bapai-backend:latest
     container_name: bapai-server
     ports:
       - "8080:8080"
@@ -22,14 +22,12 @@ services:
       - bapai-net
 
   nginx:
-    image: nginx:latest
+    image: ghcr.io/xixvivji/bapai-nginx:latest
     container_name: bapai-nginx
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx/conf.d:/etc/nginx/conf.d:ro
-      # 프론트까지 같이 할 거면 (원하면 여기 추가)
       - /var/www/html:/usr/share/nginx/html:ro
     depends_on:
       - backend
