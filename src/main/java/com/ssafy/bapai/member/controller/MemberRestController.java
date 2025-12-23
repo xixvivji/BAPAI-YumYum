@@ -4,6 +4,7 @@ import com.ssafy.bapai.common.redis.RefreshToken;
 import com.ssafy.bapai.common.redis.RefreshTokenRepository;
 import com.ssafy.bapai.common.s3.S3Service;
 import com.ssafy.bapai.common.util.JwtUtil;
+import com.ssafy.bapai.group.service.GroupService;
 import com.ssafy.bapai.member.dto.MemberDto;
 import com.ssafy.bapai.member.dto.MemberGoalDto;
 import com.ssafy.bapai.member.service.EmailService;
@@ -17,6 +18,7 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +27,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -46,6 +49,7 @@ public class MemberRestController {
     private final S3Service s3Service;
     private final RefreshTokenRepository refreshTokenRepository;
     private final HealthService healthService;
+    private final GroupService groupService;
     // =================================================================================
     // 1. 인증 & 가입 (Auth)
     // =================================================================================
@@ -456,4 +460,20 @@ public class MemberRestController {
         ));
     }
 
+
+    // 1. 그룹 멤버 목록 조회
+    @GetMapping("/groups/{groupId}/members")
+    @Operation(summary = "그룹 멤버 목록 조회")
+    public ResponseEntity<List<MemberDto>> getGroupMembers(@PathVariable Long groupId) {
+        return ResponseEntity.ok(groupService.getGroupMembers(groupId));
+    }
+
+    // 2. 초대할 사용자 검색 (닉네임 기준)
+    @GetMapping("/groups/{groupId}/search-users")
+    @Operation(summary = "초대할 사용자 검색", description = "그룹에 가입되지 않은 사용자 중 닉네임으로 검색합니다.")
+    public ResponseEntity<List<MemberDto>> searchUsers(
+            @PathVariable Long groupId,
+            @RequestParam String nickname) {
+        return ResponseEntity.ok(groupService.searchUsers(nickname, groupId));
+    }
 }

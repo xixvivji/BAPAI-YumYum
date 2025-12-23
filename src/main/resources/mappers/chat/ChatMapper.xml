@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ssafy.bapai.chat.dao.ChatDao">
+
+    <insert id="insertChatMessage" useGeneratedKeys="true" keyProperty="chatId">
+        INSERT INTO group_chat (group_id, user_id, message, created_at)
+        VALUES (#{groupId}, #{userId}, #{message}, NOW())
+    </insert>
+
+    <select id="selectChatHistory" resultType="com.ssafy.bapai.chat.dto.ChatMessageDto">
+        SELECT c.chat_id, c.group_id, c.user_id, c.message, c.created_at, m.nickname as senderName
+        FROM group_chat c
+                 JOIN member m ON c.user_id = m.user_id
+        WHERE c.group_id = #{groupId}
+        ORDER BY c.created_at ASC
+    </select>
+</mapper>

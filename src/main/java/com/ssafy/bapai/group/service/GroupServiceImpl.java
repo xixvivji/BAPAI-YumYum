@@ -3,7 +3,9 @@ package com.ssafy.bapai.group.service;
 import com.ssafy.bapai.group.dao.GroupDao;
 import com.ssafy.bapai.group.dto.GroupDto;
 import com.ssafy.bapai.group.dto.GroupRankDto;
+import com.ssafy.bapai.member.dto.MemberDto;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -183,5 +185,20 @@ public class GroupServiceImpl implements GroupService {
             throw new IllegalStateException("이미 가입된 사용자입니다.");
         }
         groupDao.insertGroupMember(groupId, targetUserId, "MEMBER");
+    }
+
+    @Override
+    public List<MemberDto> getGroupMembers(Long groupId) {
+        // GroupDao에서도 List<MemberDto>를 반환해야 함
+        return groupDao.selectGroupMembers(groupId);
+    }
+
+    @Override
+    public List<MemberDto> searchUsers(String nickname, Long groupId) {
+        if (nickname == null || nickname.trim().isEmpty()) {
+            return Collections.emptyList();
+        }
+        // GroupDao에서도 List<MemberDto>를 반환해야 함
+        return groupDao.searchUsersByNickname(nickname, groupId);
     }
 }

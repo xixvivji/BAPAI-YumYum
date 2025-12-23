@@ -1,6 +1,7 @@
 package com.ssafy.bapai.member.dao;
 
 import com.ssafy.bapai.member.dto.MemberDto;
+import java.util.List;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -41,4 +42,8 @@ public interface MemberDao {
 
     // 영양 분석 서비스에서 호출하는 메서드
     MemberDto selectMemberDetail(Long userId);
+
+    // 닉네임으로 유저 검색 (특정 그룹에 가입되지 않은 유저만)
+    List<MemberDto> searchUsersByNickname(@Param("nickname") String nickname,
+                                          @Param("groupId") Long groupId);
 }
