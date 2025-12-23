@@ -154,4 +154,21 @@
                  JOIN group_member gm ON g.group_id = gm.group_id
         WHERE gm.user_id = #{userId}
     </select>
+
+    <select id="selectGroupMembers" resultType="com.ssafy.bapai.member.dto.MemberDto">
+        SELECT m.user_id as userId, m.nickname, m.img_url as imgUrl
+        FROM group_member gm
+                 JOIN member m ON gm.user_id = m.user_id
+        WHERE gm.group_id = #{groupId}
+    </select>
+
+    <select id="searchUsersByNickname" resultType="com.ssafy.bapai.member.dto.MemberDto">
+        SELECT user_id as userId, nickname, img_url as imgUrl
+        FROM member
+        WHERE nickname LIKE CONCAT('%', #{nickname}, '%')
+          AND user_id NOT IN (
+            SELECT user_id FROM group_member WHERE group_id = #{groupId}
+            )
+        LIMIT 10
+    </select>
 </mapper>
