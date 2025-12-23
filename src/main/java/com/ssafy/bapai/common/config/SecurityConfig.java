@@ -41,6 +41,7 @@ public class SecurityConfig {
                         .requestMatchers("/images/**").permitAll()
                         .anyRequest().authenticated()
                 )
+
                 .exceptionHandling(handler -> handler
                         .authenticationEntryPoint((request, response, authException) -> {
                             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
