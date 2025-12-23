@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -31,6 +32,7 @@ import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/diet-logs")
 @RequiredArgsConstructor
@@ -74,7 +76,7 @@ public class DietRestController {
             @RequestHeader("Authorization") String token,
 
             // 1. 파일 (선택)
-            @RequestPart(value = "file", required = false) MultipartFile file,
+            @RequestPart(value = "image", required = false) MultipartFile image,
 
             // 2. 텍스트 데이터 (낱개로 받기)
             @RequestParam("date") String date,
@@ -90,7 +92,20 @@ public class DietRestController {
             @RequestParam(value = "fat", defaultValue = "0") double fat
     ) {
         Long userId = jwtUtil.getUserId(token.substring(7));
-
+        if (image == null) {
+            log.info(
+                    "[Diet] createDiet userId={} file=null date={} time={} mealType={} foodName={}",
+                    userId, date, time, mealType, foodName);
+        } else {
+            log.info(
+                    "[Diet] createDiet userId={} filePresent=true empty={} name={} size={} contentType={} date={} time={} mealType={} foodName={}",
+                    userId,
+                    image.isEmpty(),
+                    image.getOriginalFilename(),
+                    image.getSize(),
+                    image.getContentType(),
+                    date, time, mealType, foodName);
+        }
         // 3. DietDto 조립
         DietDto dietDto = new DietDto();
         dietDto.setUserId(userId);
@@ -133,11 +148,16 @@ public class DietRestController {
 
         try {
             // 5. 파일 있으면 업로드
-            if (file != null && !file.isEmpty()) {
-                String imgUrl = s3Service.uploadFile(file, "diet");
-                dietDto.setDietImg(imgUrl);
-            }
+            if (image != null && !image.isEmpty()) {
+                log.info("[Diet] uploading to S3... name={} size={} contentType={}",
+                        image.getOriginalFilename(), image.getSize(), image.getContentType());
 
+                String imgUrl = s3Service.uploadFile(image, "diet");
+                log.info("[Diet] S3 upload success imgUrl={}", imgUrl);
+                dietDto.setDietImg(imgUrl);
+            } else {
+                log.info("[Diet] no file uploaded (null or empty).");
+            }
             // 6. 저장 요청
             dietService.saveDiet(dietDto);
 
@@ -215,19 +235,43 @@ public class DietRestController {
             @Parameter(hidden = true) @RequestHeader("Authorization") String token,
             @PathVariable Long dietId,
             @ModelAttribute DietDto dietDto,
-            @RequestParam(value = "file", required = false) MultipartFile file) { // ★ file 로 통일
+
+            // ✅ file -> image 로 통일
+            @RequestPart(value = "image", required = false) MultipartFile image
+    ) {
 
         Long userId = jwtUtil.getUserId(token.substring(7));
         dietDto.setDietId(dietId);
         dietDto.setUserId(userId);
 
+        // ✅ 디버깅 로그 (선택이지만 추천)
+        if (image == null) {
+            log.info("[Diet] updateDiet userId={} dietId={} image=null", userId, dietId);
+        } else {
+            log.info(
+                    "[Diet] updateDiet userId={} dietId={} imagePresent=true empty={} name={} size={} contentType={}",
+                    userId, dietId,
+                    image.isEmpty(),
+                    image.getOriginalFilename(),
+                    image.getSize(),
+                    image.getContentType());
+        }
+
         try {
-            if (file != null && !file.isEmpty()) {
-                String imgUrl = s3Service.uploadFile(file, "diet");
+            if (image != null && !image.isEmpty()) {
+                log.info("[Diet] uploading(update) to S3... name={} size={} contentType={}",
+                        image.getOriginalFilename(), image.getSize(), image.getContentType());
+
+                String imgUrl = s3Service.uploadFile(image, "diet");
+
+                log.info("[Diet] S3 upload(update) success imgUrl={}", imgUrl);
                 dietDto.setDietImg(imgUrl);
+            } else {
+                log.info("[Diet] updateDiet no image uploaded (null or empty).");
             }
+
             dietService.updateDiet(dietDto);
-            return ResponseEntity.ok(Map.of("message", "식단이 수정되었습니다.")); // ★ success 제거
+            return ResponseEntity.ok(Map.of("message", "식단이 수정되었습니다."));
         } catch (IOException e) {
             return ResponseEntity.internalServerError().body(Map.of("message", "이미지 업로드 실패"));
         }

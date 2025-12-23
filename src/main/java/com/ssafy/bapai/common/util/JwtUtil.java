@@ -16,8 +16,21 @@ public class JwtUtil {
     @Value("${jwt.secret}")
     private String secretKey;
 
-    @Value("${jwt.expiration}")
-    private long expirationTime; // 기본 만료 시간 (24시간)
+    @Value("${jwt.access-expiration}")
+    private long accessExpiration;
+
+    @Value("${jwt.refresh-expiration}")
+    private long refreshExpiration;
+
+    // Access Token 생성용 (기본값)
+    public String createAccessToken(Long userId, String role) {
+        return createToken(userId, role, accessExpiration);
+    }
+
+    // Refresh Token 생성용
+    public String createRefreshToken(Long userId, String role) {
+        return createToken(userId, role, refreshExpiration);
+    }
 
     private Key key;
 
@@ -26,10 +39,6 @@ public class JwtUtil {
         this.key = Keys.hmacShaKeyFor(secretKey.getBytes());
     }
 
-    // 1. 기본 토큰 생성 (설정 파일의 만료 시간 사용)
-    public String createToken(Long userId, String role) {
-        return createToken(userId, role, expirationTime);
-    }
 
     // 2. 만료 시간 직접 지정 (리프레시 토큰 등에 사용)
     public String createToken(Long userId, String role, long expireTime) {
@@ -59,7 +68,11 @@ public class JwtUtil {
             }
             parseClaims(token);
             return true;
+        } catch (io.jsonwebtoken.ExpiredJwtException e) {
+            System.out.println("🚨 토큰 만료됨: " + e.getMessage());
+            throw e;
         } catch (Exception e) {
+            System.out.println("🚨 유효하지 않은 토큰: " + e.getMessage());
             return false;
         }
     }
@@ -70,5 +83,14 @@ public class JwtUtil {
                 .build()
                 .parseClaimsJws(token)
                 .getBody();
+    }
+
+    public Long getExpiration(String token) {
+        if (token.startsWith("Bearer ")) {
+            token = token.substring(7);
+        }
+        Date expiration = parseClaims(token).getExpiration();
+        long now = new Date().getTime();
+        return (expiration.getTime() - now);
     }
 }

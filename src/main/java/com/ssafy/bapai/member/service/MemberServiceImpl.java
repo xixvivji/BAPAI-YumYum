@@ -9,7 +9,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +25,7 @@ public class MemberServiceImpl implements MemberService {
     private final PasswordEncoder passwordEncoder;
     private final HealthDao healthDao;
     private final RefreshTokenRepository refreshTokenRepository;
+    private final StringRedisTemplate redisTemplate;
 
     // 1. 회원가입
     @Override
@@ -47,24 +50,38 @@ public class MemberServiceImpl implements MemberService {
         }
     }
 
-    // 2. 로그인
     @Override
     public MemberDto login(String username, String password) {
         MemberDto member = memberDao.selectMemberByUsername(username);
 
-        // 유저 없음 or 탈퇴
         if (member == null || "WITHDRAWN".equals(member.getStatus())) {
             return null;
         }
-
-        // 비밀번호 체크
         if (!passwordEncoder.matches(password, member.getPassword())) {
             return null;
+        }
+
+        //  90일 휴먼 체크 (DB last_login_at 형식: "yyyy-MM-dd HH:mm:ss")
+        if (member.getLastLoginAt() != null && !member.getLastLoginAt().isBlank()) {
+            var fmt = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+            try {
+                var last = java.time.LocalDateTime.parse(member.getLastLoginAt(), fmt);
+                long days =
+                        java.time.Duration.between(last, java.time.LocalDateTime.now()).toDays();
+
+                if (days >= 90) {
+                    memberDao.updateTempPasswordFlag(member.getUserId(), true);
+                    member.setTempPassword(true);
+                    return member; // 컨트롤러에서 isTempPassword면 토큰 발급 막기
+                }
+            } catch (Exception ignore) {
+            }
         }
 
         memberDao.updateLastLogin(member.getUserId());
         return member;
     }
+
 
     // 로그아웃
     @Override
@@ -235,5 +252,15 @@ public class MemberServiceImpl implements MemberService {
         options.put("diseases", healthDao.selectAllDiseases());
         options.put("allergies", healthDao.selectAllAllergies());
         return options;
+    }
+
+    @Override
+    public void registerBlacklist(Long userId, String accessToken, Long expiration) {
+        // 1. 해당 유저의 Refresh Token 삭제 (재발급 방지)
+        refreshTokenRepository.deleteById(String.valueOf(userId));
+
+
+        redisTemplate.opsForValue()
+                .set("BL:" + accessToken, "logout", expiration, TimeUnit.MILLISECONDS);
     }
 }

@@ -2,6 +2,7 @@ package com.ssafy.bapai.group.dao;
 
 import com.ssafy.bapai.group.dto.GroupDto;
 import com.ssafy.bapai.group.dto.GroupRankDto;
+import com.ssafy.bapai.member.dto.MemberDto;
 import java.util.List;
 import java.util.Map;
 import org.apache.ibatis.annotations.Mapper;
@@ -52,4 +53,10 @@ public interface GroupDao {
     void insertHashtag(Map<String, Object> params);
 
     List<GroupDto> selectMyGroups(Long userId);
+
+    List<MemberDto> selectGroupMembers(Long groupId);
+    
+
+    List<MemberDto> searchUsersByNickname(@Param("nickname") String nickname,
+                                          @Param("groupId") Long groupId);
 }

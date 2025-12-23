@@ -51,4 +51,6 @@ public interface MemberService {
     MemberDto socialLogin(String email, String name, String provider, String providerId);
 
     Map<String, List<OptionDto>> getHealthOptions();
+
+    void registerBlacklist(Long userId, String accessToken, Long expiration);
 }

@@ -1,6 +1,7 @@
 package com.ssafy.bapai.common.config;
 
 import com.ssafy.bapai.common.security.JwtAuthenticationFilter;
+import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -40,7 +41,14 @@ public class SecurityConfig {
                         .requestMatchers("/images/**").permitAll()
                         .anyRequest().authenticated()
                 )
-
+                .exceptionHandling(handler -> handler
+                        .authenticationEntryPoint((request, response, authException) -> {
+                            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                            response.setContentType("application/json;charset=UTF-8");
+                            response.getWriter()
+                                    .write("{\"success\": false, \"message\": \"인증 정보가 없거나 만료되었습니다.\"}");
+                        })
+                )
                 .addFilterBefore(jwtAuthenticationFilter,
                         UsernamePasswordAuthenticationFilter.class);
 

@@ -13,6 +13,7 @@ import com.ssafy.bapai.diet.dto.DietLogItemDto;
 import com.ssafy.bapai.diet.dto.PeriodDietLogDto;
 import com.ssafy.bapai.diet.dto.StreakDto;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,6 +34,10 @@ public class DietServiceImpl implements DietService {
     private final AiService aiService;
     private final ObjectMapper objectMapper;
 
+    // =================================================================================
+    // 1. 저장 및 분석
+    // =================================================================================
+
     @Override
     public DietDto analyzeDiet(MultipartFile file, String hint) {
         DietDto dietDto = new DietDto();
@@ -46,10 +51,10 @@ public class DietServiceImpl implements DietService {
                 throw new RuntimeException("이미지 업로드 중 오류 발생");
             }
         }
-        // 2. AI 분석 요청
+        // 2. AI 분석
         String aiResponse = aiService.analyzeFood(file, hint);
 
-        // 3. 파싱 및 계산
+        // 3. 결과 적용
         applyAiResult(dietDto, aiResponse);
         calculateTotalNutrition(dietDto);
 
@@ -61,6 +66,7 @@ public class DietServiceImpl implements DietService {
     public void saveDiet(DietDto dietDto) {
         calculateTotalNutrition(dietDto);
         dietDao.insertDiet(dietDto);
+
         if (dietDto.getFoodList() != null && !dietDto.getFoodList().isEmpty()) {
             for (DietDetailDto detail : dietDto.getFoodList()) {
                 detail.setDietId(dietDto.getDietId());
@@ -75,6 +81,7 @@ public class DietServiceImpl implements DietService {
         calculateTotalNutrition(dietDto);
         dietDao.updateDiet(dietDto);
         dietDao.deleteDietDetailsByDietId(dietDto.getDietId()); // 기존 상세 삭제
+
         if (dietDto.getFoodList() != null && !dietDto.getFoodList().isEmpty()) {
             for (DietDetailDto detail : dietDto.getFoodList()) {
                 detail.setDietId(dietDto.getDietId());
@@ -89,9 +96,17 @@ public class DietServiceImpl implements DietService {
         dietDao.deleteDiet(dietId);
     }
 
+
+    // =================================================================================
+    // 2. 조회 (핵심 로직)
+    // =================================================================================
+
+    /**
+     * 일간 조회: 상세 리스트 + 이미지 포함 (selectDailyDiets 사용)
+     */
     @Override
     public DailyDietLogDto getDailyDietLog(Long userId, String date) {
-        // 1. DB에서 데이터 가져오기 (기존 DAO 메서드 재사용)
+        // 1. DB 조회 (이미지 포함된 쿼리)
         List<DietDto> originalList = dietDao.selectDailyDiets(userId, date);
         Map<String, Object> waterInfo = dietDao.selectWaterInfo(userId, date);
 
@@ -100,32 +115,88 @@ public class DietServiceImpl implements DietService {
         int waterGoal = (waterInfo != null) ?
                 Integer.parseInt(String.valueOf(waterInfo.get("water_goal"))) : 8;
 
-        // 2. 통계 계산 & 리스트 평탄화 (Flatten)
+        // 2. 통계 계산 및 DTO 변환
+        return calculateDailyStats(originalList, date, waterCount, waterGoal);
+    }
+
+    /**
+     * 기간(주간/월간) 조회: Loop 없이 한 번에 조회 + 이미지 제외 (selectWeeklyDiets 사용)
+     */
+    @Override
+    public PeriodDietLogDto getPeriodDietLogs(Long userId, String startDate, String endDate) {
+        // 1. DB 조회 (한 번에 다 가져옴, 이미지는 XML에서 제외됨)
+        List<DietDto> fullList = dietDao.selectWeeklyDiets(userId, startDate, endDate);
+
+        // 2. 날짜별로 그룹핑 (Key: "YYYY-MM-DD")
+        Map<String, List<DietDto>> groupedByDate = fullList.stream()
+                .collect(Collectors.groupingBy(DietDto::getEatDate));
+
+        // 3. 결과 맵 생성
+        Map<String, DailyDietLogDto> resultMap = new LinkedHashMap<>();
+
+        java.time.LocalDate start = java.time.LocalDate.parse(startDate);
+        java.time.LocalDate end = java.time.LocalDate.parse(endDate);
+
+        double totalKcal = 0, totalCarbs = 0, totalProtein = 0, totalFat = 0;
+        int totalMeal = 0, totalSnack = 0;
+        int index = 1; // 1일차, 2일차... 인덱스
+
+        while (!start.isAfter(end)) {
+            String currDate = start.toString();
+            List<DietDto> dayList = groupedByDate.getOrDefault(currDate, Collections.emptyList());
+
+            // 해당 날짜의 통계 계산 (물 정보는 기간 조회시엔 보통 0이나 기본값 처리, 필요하면 추가 조회)
+            DailyDietLogDto dailyStat = calculateDailyStats(dayList, currDate, 0, 0);
+
+            // 전체 합계 누적
+            totalKcal += dailyStat.getTotalCalories();
+            totalCarbs += dailyStat.getTotalCarbs();
+            totalProtein += dailyStat.getTotalProtein();
+            totalFat += dailyStat.getTotalFat();
+            totalMeal += dailyStat.getTotalMealCount();
+            totalSnack += dailyStat.getTotalSnackCount();
+
+            // 결과 맵에 추가
+            resultMap.put(String.valueOf(index++), dailyStat);
+
+            start = start.plusDays(1);
+        }
+
+        return PeriodDietLogDto.builder()
+                .startDate(startDate)
+                .endDate(endDate)
+                .totalMealCount(totalMeal)
+                .totalSnackCount(totalSnack)
+                .totalCalories(round(totalKcal))
+                .totalCarbs(round(totalCarbs))
+                .totalProtein(round(totalProtein))
+                .totalFat(round(totalFat))
+                .dailyLogs(resultMap)
+                .build();
+    }
+
+    // ★ [공통 로직 분리] 리스트 -> DailyDietLogDto 변환
+    private DailyDietLogDto calculateDailyStats(List<DietDto> dietList, String date, int waterCount,
+                                                int waterGoal) {
         double sumKcal = 0, sumCarbs = 0, sumProtein = 0, sumFat = 0;
         int mealCount = 0, snackCount = 0;
-
-        // ★ 새로 만든 평탄화된 리스트
         List<DietLogItemDto> flatList = new ArrayList<>();
 
-        for (DietDto diet : originalList) {
-            // 통계 계산 (식사/간식 횟수)
+        for (DietDto diet : dietList) {
             if ("SNACK".equalsIgnoreCase(diet.getMealType())) {
                 snackCount++;
             } else {
                 mealCount++;
             }
 
-            // ★ 내부 음식 리스트를 꺼내서 바깥 리스트로 펼치기
             if (diet.getFoodList() != null) {
                 for (DietDetailDto food : diet.getFoodList()) {
-                    // 영양소 합산
                     sumKcal += (food.getKcal() != null ? food.getKcal() : 0);
                     sumCarbs += (food.getCarbs() != null ? food.getCarbs() : 0);
                     sumProtein += (food.getProtein() != null ? food.getProtein() : 0);
                     sumFat += (food.getFat() != null ? food.getFat() : 0);
 
-                    // 평탄화 객체 생성 (원하시는 JSON 구조)
-                    DietLogItemDto item = DietLogItemDto.builder()
+                    flatList.add(DietLogItemDto.builder()
                             .dietId(diet.getDietId())
                             .date(diet.getEatDate())
                             .foodName(food.getFoodName())
@@ -136,135 +207,72 @@ public class DietServiceImpl implements DietService {
                             .mealType(diet.getMealType())
                             .time(diet.getTime())
                             .servings(food.getAmount())
-                            .build();
-
-                    flatList.add(item);
+                            .imgUrl(diet.getDietImg()) // 일일조회면 있고, 기간조회면 null임
+                            .build());
                 }
             }
         }
 
-        // 3. 결과 반환
         return DailyDietLogDto.builder()
                 .date(date)
                 .waterCupCount(waterCount)
                 .waterGoal(waterGoal)
                 .totalMealCount(mealCount)
                 .totalSnackCount(snackCount)
-                .totalCalories(Math.round(sumKcal * 10) / 10.0)
-                .totalCarbs(Math.round(sumCarbs * 10) / 10.0)
-                .totalProtein(Math.round(sumProtein * 10) / 10.0)
-                .totalFat(Math.round(sumFat * 10) / 10.0)
-                .dietList(flatList) // ★ 펼쳐진 리스트 넣기
+                .totalCalories(round(sumKcal))
+                .totalCarbs(round(sumCarbs))
+                .totalProtein(round(sumProtein))
+                .totalFat(round(sumFat))
+                .dietList(flatList)
                 .build();
     }
 
-    /**
-     * 주간/월간 조회: 기간 내 날짜별로 Loop 돌면서 Map 생성 (Key: "1", "2" ...)
-     */
-    @Override
-    public PeriodDietLogDto getPeriodDietLogs(Long userId, String startDate, String endDate) {
-        Map<String, DailyDietLogDto> resultMap = new LinkedHashMap<>();
 
-        java.time.LocalDate start = java.time.LocalDate.parse(startDate);
-        java.time.LocalDate end = java.time.LocalDate.parse(endDate);
+    // =================================================================================
+    // 3. 스트릭 및 물 관리
+    // =================================================================================
 
-        // ★ 전체 합계를 저장할 변수들 초기화
-        int periodMealCount = 0;
-        int periodSnackCount = 0;
-        double periodKcal = 0;
-        double periodCarbs = 0;
-        double periodProtein = 0;
-        double periodFat = 0;
-
-        int index = 1;
-
-        while (!start.isAfter(end)) {
-            String currDate = start.toString();
-
-            // 1. 하루치 데이터 가져오기 (기존 로직 활용)
-            DailyDietLogDto dailyLog = getDailyDietLog(userId, currDate);
-
-            // 2. ★ 전체 합계에 하루치 데이터를 누적 (더하기)
-            periodMealCount += dailyLog.getTotalMealCount();
-            periodSnackCount += dailyLog.getTotalSnackCount();
-            periodKcal += dailyLog.getTotalCalories();
-            periodCarbs += dailyLog.getTotalCarbs();
-            periodProtein += dailyLog.getTotalProtein();
-            periodFat += dailyLog.getTotalFat();
-
-            // 3. 맵에 담기 (1일차, 2일차...)
-            resultMap.put(String.valueOf(index++), dailyLog);
-
-            start = start.plusDays(1);
-        }
-
-        // 4. 최종 결과 DTO 생성해서 반환
-        return PeriodDietLogDto.builder()
-                .startDate(startDate)
-                .endDate(endDate)
-                .totalMealCount(periodMealCount)
-                .totalSnackCount(periodSnackCount)
-                // 소수점 다듬기 (선택 사항)
-                .totalCalories(Math.round(periodKcal * 10) / 10.0)
-                .totalCarbs(Math.round(periodCarbs * 10) / 10.0)
-                .totalProtein(Math.round(periodProtein * 10) / 10.0)
-                .totalFat(Math.round(periodFat * 10) / 10.0)
-                .dailyLogs(resultMap) // 여기에 상세 리스트 들어감
-                .build();
-    }
-
-    /**
-     * 스트릭 조회: 현재 연속 일수 & 역대 최장 연속 일수
-     */
     @Override
     public StreakDto getDietStreak(Long userId) {
-        List<String> dates = dietDao.selectDietDates(userId); // DB에서 내림차순 날짜 리스트 가져옴
+        List<String> dates = dietDao.selectDietDates(userId);
 
         if (dates.isEmpty()) {
             return StreakDto.builder().currentStreak(0).longestStreak(0).build();
         }
 
-        // 1. 현재 스트릭(Current Streak) 계산
+        // 1. 현재 스트릭
         int currentStreak = 0;
         java.time.LocalDate today = java.time.LocalDate.now();
         java.time.LocalDate checkDate = today;
+        java.util.Set<String> dateSet = new java.util.HashSet<>(dates);
 
-        java.util.Set<String> dateSet = new java.util.HashSet<>(dates); // 검색 속도 향상
-
-        // 오늘 기록이 없으면 어제부터 체크 (어제 썼으면 스트릭 유지)
         if (!dateSet.contains(today.toString())) {
             checkDate = today.minusDays(1);
         }
 
-        // 과거로 가면서 연속된 날짜 카운트
         while (dateSet.contains(checkDate.toString())) {
             currentStreak++;
             checkDate = checkDate.minusDays(1);
         }
 
-        // 2. 최장 스트릭(Longest Streak) 계산
+        // 2. 최장 스트릭
         int longestStreak = 0;
         int tempStreak = 1;
-
-        // 날짜 정렬 (오름차순)
         List<java.time.LocalDate> sortedDates = dates.stream()
                 .map(java.time.LocalDate::parse)
                 .sorted()
                 .collect(Collectors.toList());
 
         if (!sortedDates.isEmpty()) {
-            longestStreak = 1; // 기록이 하나라도 있으면 최소 1
+            longestStreak = 1;
         }
 
         for (int i = 0; i < sortedDates.size() - 1; i++) {
-            java.time.LocalDate curr = sortedDates.get(i);
-            java.time.LocalDate next = sortedDates.get(i + 1);
-
-            if (curr.plusDays(1).equals(next)) {
+            if (sortedDates.get(i).plusDays(1).equals(sortedDates.get(i + 1))) {
                 tempStreak++;
             } else {
                 longestStreak = Math.max(longestStreak, tempStreak);
-                tempStreak = 1; // 끊기면 리셋
+                tempStreak = 1;
             }
         }
         longestStreak = Math.max(longestStreak, tempStreak);
@@ -287,8 +295,9 @@ public class DietServiceImpl implements DietService {
         dietDao.updateWaterGoalDelta(userId, date, delta);
     }
 
+
     // =================================================================================
-    // 4. [기타] 조회 및 헬퍼 메서드
+    // 4. 기타 조회 및 헬퍼
     // =================================================================================
 
     @Override
@@ -314,28 +323,25 @@ public class DietServiceImpl implements DietService {
         return dietDao.selectDietCount();
     }
 
-    // ★ 헬퍼: 영양소 총합 계산
+    // 영양소 합계 계산
     private void calculateTotalNutrition(DietDto dto) {
         if (dto.getFoodList() == null || dto.getFoodList().isEmpty()) {
             return;
         }
 
         double sumKcal = 0, sumCarbs = 0, sumProtein = 0, sumFat = 0;
-
         for (DietDetailDto food : dto.getFoodList()) {
             sumKcal += (food.getKcal() != null ? food.getKcal() : 0);
             sumCarbs += (food.getCarbs() != null ? food.getCarbs() : 0);
             sumProtein += (food.getProtein() != null ? food.getProtein() : 0);
             sumFat += (food.getFat() != null ? food.getFat() : 0);
         }
-
         dto.setTotalKcal(round(sumKcal));
         dto.setTotalCarbs(round(sumCarbs));
         dto.setTotalProtein(round(sumProtein));
         dto.setTotalFat(round(sumFat));
     }
 
-    // ★ 헬퍼: AI 결과 파싱
     private void applyAiResult(DietDto dietDto, String jsonResult) {
         try {
             JsonNode root = objectMapper.readTree(jsonResult);
@@ -361,17 +367,14 @@ public class DietServiceImpl implements DietService {
                 dietDto.setScore(root.get("score").asInt());
             }
 
-            // 메모가 비어있으면 첫 음식명으로 자동 채움
             if ((dietDto.getMemo() == null || dietDto.getMemo().isBlank()) && !foodList.isEmpty()) {
                 dietDto.setMemo(foodList.get(0).getFoodName());
             }
-
         } catch (Exception e) {
             log.error("AI 응답 파싱 실패", e);
         }
     }
 
-    // 소수점 반올림 (소수점 첫째 자리까지)
     private double round(double value) {
         return Math.round(value * 10) / 10.0;
     }
