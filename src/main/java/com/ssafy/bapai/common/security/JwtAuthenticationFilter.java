@@ -28,7 +28,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         // 1. 요청 URL 확인 (로그인 등은 통과)
         String requestURI = request.getRequestURI();
-
+        if (requestURI.startsWith("/actuator")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
         // 2. 헤더 확인
         String header = request.getHeader("Authorization");
 
