@@ -129,7 +129,7 @@
         </set>
         WHERE user_id = #{userId}
     </update>
-    
+
     <update id="updatePassword">
         UPDATE member
         SET password         = #{password},
@@ -157,5 +157,10 @@
         SET status = 'WITHDRAWN'
         WHERE user_id = #{userId}
     </update>
-
+    <update id="updateTempPasswordFlag">
+        UPDATE member
+        SET is_temp_password = #{value},
+            updated_at       = NOW()
+        WHERE user_id = #{userId}
+    </update>
 </mapper>

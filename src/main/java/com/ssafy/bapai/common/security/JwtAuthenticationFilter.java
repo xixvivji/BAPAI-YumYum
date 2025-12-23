@@ -59,6 +59,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 } else {
                     System.out.println("🚨 토큰 검증 실패 (validateToken false 반환)");
                 }
+            } catch (io.jsonwebtoken.ExpiredJwtException e) {
+                // 401 에러 응답 직접 작성
+                sendErrorResponse(response, "토큰이 만료되었습니다.", HttpServletResponse.SC_UNAUTHORIZED);
+                return; // 다음 필터로 가지 않고 여기서 종료
             } catch (Exception e) {
                 System.out.println("🚨 에러 발생: " + e.getMessage());
                 e.printStackTrace();
@@ -70,5 +74,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         System.out.println("============== [필터 끝] ==============");
 
         filterChain.doFilter(request, response);
+    }
+
+    private void sendErrorResponse(HttpServletResponse response, String message, int status)
+            throws IOException {
+        response.setStatus(status);
+        response.setContentType("application/json;charset=UTF-8");
+        response.getWriter()
+                .write(String.format("{\"success\": false, \"message\": \"%s\"}", message));
     }
 }
