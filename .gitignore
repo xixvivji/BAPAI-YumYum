@@ -49,3 +49,4 @@ logs/
 # src/main/resources/application-secret.yml
 # src/main/resources/application-dev.yml
 # .env
+.env
