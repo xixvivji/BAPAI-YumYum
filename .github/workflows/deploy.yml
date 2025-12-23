@@ -2,7 +2,7 @@ name: Deploy to EC2 (Docker + GHCR)
 
 on:
   push:
-    branches: [ "master" ]
+    branches: ["master"]
 
 permissions:
   contents: read
@@ -43,6 +43,15 @@ jobs:
           tags: |
             ghcr.io/xixvivji/bapai-nginx:latest
             ghcr.io/xixvivji/bapai-nginx:${{ github.sha }}
+
+      # 값 자체는 안 찍고, "존재 여부"만 확인
+      - name: Debug secrets presence
+        run: |
+          test -n "${{ secrets.EC2_HOST }}" && echo "EC2_HOST is set" || (echo "EC2_HOST is MISSING" && exit 1)
+          test -n "${{ secrets.EC2_USER }}" && echo "EC2_USER is set" || (echo "EC2_USER is MISSING" && exit 1)
+          test -n "${{ secrets.EC2_SSH_KEY }}" && echo "EC2_SSH_KEY is set" || (echo "EC2_SSH_KEY is MISSING" && exit 1)
+          test -n "${{ secrets.EC2_APP_DIR }}" && echo "EC2_APP_DIR is set" || (echo "EC2_APP_DIR is MISSING" && exit 1)
+          test -n "${{ secrets.GHCR_PAT }}" && echo "GHCR_PAT is set" || (echo "GHCR_PAT is MISSING" && exit 1)
 
       - name: Deploy on EC2
         uses: appleboy/ssh-action@v1.0.3
