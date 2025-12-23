@@ -14,6 +14,6 @@ FROM amazoncorretto:17-alpine-jdk
 WORKDIR /app
 # 빌드 결과물 복사
 COPY --from=builder /app/target/*.jar app.jar
-
+COPY --from=builder /app/application.yml /app/application.yml 
 # 실행
 ENTRYPOINT ["java", "-jar", "app.jar"]
