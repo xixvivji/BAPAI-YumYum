@@ -320,8 +320,8 @@ public class AiService {
                 .type("DAILY").dateRange(date).dailyMeals(dailyLogs)
                 .aiAnalysis(aiMessage).build();
     }
+    
 
-    // 4) 주간/월간 리포트 (✅ 데이터 없으면 문장 + 저장X + 500 방지)
     @Transactional
     public AiReportResponse getPeriodReport(Long userId, String type) {
         LocalDate end = LocalDate.now();
@@ -330,7 +330,8 @@ public class AiService {
         String eDate = end.toString();
 
         ReportLogDto cachedLog = reportDao.selectExistingReport(userId, type, sDate, eDate);
-        if (cachedLog != null) {
+
+        if (cachedLog != null && !isFallbackMessage(cachedLog.getAiMessage())) {
             return AiReportResponse.builder()
                     .type(type).dateRange(sDate + " ~ " + eDate)
                     .averageScore(cachedLog.getScoreAverage())
@@ -381,10 +382,11 @@ public class AiService {
                 () -> reportClient.prompt().user(sanitizeForPrompt(prompt)).call().content(),
                 FALLBACK_REPORT_MSG);
 
-        // ✅ 데이터 있는 경우에만 저장
-        reportDao.insertReportLog(ReportLogDto.builder()
-                .userId(userId).reportType(type).startDate(sDate).endDate(eDate)
-                .scoreAverage(avgScore).aiMessage(aiMessage).build());
+        if (!isFallbackMessage(aiMessage)) {
+            reportDao.insertReportLog(ReportLogDto.builder()
+                    .userId(userId).reportType(type).startDate(sDate).endDate(eDate)
+                    .scoreAverage(avgScore).aiMessage(aiMessage).build());
+        }
 
         return AiReportResponse.builder()
                 .type(type).dateRange(sDate + " ~ " + eDate)
@@ -473,5 +475,14 @@ public class AiService {
             return 0.0;
         }
         return ((Number) map.get(key)).doubleValue();
+    }
+
+    private boolean isFallbackMessage(String msg) {
+        if (msg == null) {
+            return false;
+        }
+        return msg.equals(FALLBACK_REPORT_MSG)
+                || msg.equals(FALLBACK_RECOMMEND_MSG)
+                || msg.equals(FALLBACK_GAP_MSG);
     }
 }
