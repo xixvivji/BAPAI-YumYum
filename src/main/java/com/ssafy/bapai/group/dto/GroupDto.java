@@ -23,5 +23,5 @@ public class GroupDto {
     private String ownerName;   // 방장 닉네임
     private int memberCount;    // 현재 인원
     private boolean isJoined;   // 가입 여부
-    private String myRole;      // LEADER, MEMBER
+    private boolean isOwner;
 }
