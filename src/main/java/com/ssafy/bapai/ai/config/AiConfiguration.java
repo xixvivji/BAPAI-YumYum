@@ -42,7 +42,7 @@ public class AiConfiguration {
     public RestClient.Builder restClientBuilder() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(Duration.ofSeconds(5));
-        factory.setReadTimeout(Duration.ofSeconds(30));
+        factory.setReadTimeout(Duration.ofSeconds(120));
 
         return RestClient.builder()
                 .requestFactory(new BufferingClientHttpRequestFactory(factory));
@@ -80,7 +80,7 @@ public class AiConfiguration {
 
         return new OpenAiChatModel(api, OpenAiChatOptions.builder()
                 .model(reportModel) // ✅ 기본 gpt-5 (미지원/불안정하면 gpt-4.1로 env 변경)
-                .temperature(reportTemp)
+
                 .build());
     }
 
@@ -88,4 +88,6 @@ public class AiConfiguration {
     public ChatClient reportChatClient(@Qualifier("reportChatModel") ChatModel model) {
         return ChatClient.create(model);
     }
+
+
 }
