@@ -1,5 +1,6 @@
 package com.ssafy.bapai.common.exception;
 
+import io.jsonwebtoken.JwtException;
 import java.util.HashMap;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
@@ -25,6 +26,14 @@ public class GlobalExceptionHandler {
         response.put("message", errorMessage);
 
         return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(JwtException.class)
+    public ResponseEntity<?> handleJwtException(JwtException ex) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", false);
+        response.put("message", "유효하지 않은 액세스 토큰입니다.");
+        return new ResponseEntity<>(response, HttpStatus.UNAUTHORIZED);
     }
 
     // 그 외 모든 에러 처리

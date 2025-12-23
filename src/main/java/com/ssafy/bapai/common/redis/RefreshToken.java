@@ -22,6 +22,6 @@ public class RefreshToken {
 
     private String token;  // 리프레시 토큰 값
 
-    @TimeToLive // 만료 시간 (선택 사항, 위 @RedisHash에 설정했으면 생략 가능)
+    @TimeToLive
     private Long expiration;
 }

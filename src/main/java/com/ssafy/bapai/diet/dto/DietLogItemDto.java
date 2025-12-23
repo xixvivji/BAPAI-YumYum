@@ -16,4 +16,5 @@ public class DietLogItemDto {
     private String mealType;    // "점심" (또는 LUNCH)
     private String time;        // "12:30" (없으면 null)
     private int servings;       // amount
+    private String imgUrl;
 }
