@@ -9,6 +9,11 @@ import com.ssafy.bapai.ai.dto.ReportLogDto;
 import com.ssafy.bapai.challenge.dto.ChallengePresetDto;
 import com.ssafy.bapai.diet.dao.DietDao;
 import com.ssafy.bapai.diet.dto.DietDto;
+import com.ssafy.bapai.member.dto.MemberDto;
+import com.ssafy.bapai.member.dto.MemberGoalDto;
+import com.ssafy.bapai.member.service.HealthService;
+import com.ssafy.bapai.member.service.MemberService;
+import com.ssafy.bapai.member.service.OptionService;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
@@ -55,19 +60,29 @@ public class AiService {
     private final ChatClient visionClient;
     private final ChatClient reportClient;
     private final ChatModel chatModel;
+    private final MemberService memberService;
+    private final OptionService optionService;
+    private final HealthService healthService;
 
     public AiService(ObjectMapper objectMapper,
                      ReportDao reportDao,
                      DietDao dietDao,
                      ChatModel chatModel,
                      @Qualifier("visionChatClient") ChatClient visionClient,
-                     @Qualifier("reportChatClient") ChatClient reportClient) {
+                     @Qualifier("reportChatClient") ChatClient reportClient,
+                     MemberService memberService,
+                     OptionService optionService,
+                     HealthService healthService
+    ) {
         this.objectMapper = objectMapper;
         this.reportDao = reportDao;
         this.dietDao = dietDao;
         this.visionClient = visionClient;
         this.reportClient = reportClient;
         this.chatModel = chatModel;
+        this.memberService = memberService;
+        this.optionService = optionService;
+        this.healthService = healthService;
     }
 
     // -----------------------------
@@ -242,14 +257,34 @@ public class AiService {
 
     // 2) 다음 끼니 추천 (✅ 500 방지 + 토큰 방어)
     public String recommendNextMeal(Long userId) {
+        // 1. 기본 회원 정보(+질병/알러지) 조회
+        MemberDto member = memberService.getMember(userId); // 신체, 질환, 알레르기 포함
+        MemberGoalDto metrics = healthService.calculateHealthMetrics(member); // 권장 섭취량
+
+        String diseaseLabel = optionService.diseaseNames(member.getDiseaseIds());
+        String allergyLabel = optionService.allergyNames(member.getAllergyIds());
+        String gender = "M".equalsIgnoreCase(member.getGender()) ? "남성" : "여성";
+
+        // 아래 두 변수는 Double일 수 있으니 주의! (Double → int: NullPointer 방지)
+        int age = (member.getBirthYear() == null) ? 0 :
+                LocalDate.now().getYear() - member.getBirthYear();
+        int height = (member.getHeight() == null) ? 0 : (int) Math.round(member.getHeight());
+        int weight = (member.getWeight() == null) ? 0 : (int) Math.round(member.getWeight());
+
+        String activityLabel = activityLevelKor(member.getActivityLevel());
+        String goalLabel = dietGoalKor(member.getDietGoal());
+
+        long recKcal = Math.round(metrics.getRecCalories());
+        long recCarbs = Math.round(metrics.getRecCarbs());
+        long recProtein = Math.round(metrics.getRecProtein());
+        long recFat = Math.round(metrics.getRecFat());
+
+        // 2. 오늘 식단 기록 불러오기 (기존 로직 유지)
         String today = LocalDate.now().toString();
         List<DietDto> logs = dietDao.selectDailyDiets(userId, today);
 
-        String prompt;
-        if (logs == null || logs.isEmpty()) {
-            prompt = "오늘 기록된 식사가 없어. 가볍고 건강한 메뉴 3가지를 추천해줘.";
-        } else {
-            StringBuilder sb = new StringBuilder();
+        StringBuilder foodHistory = new StringBuilder();
+        if (logs != null && !logs.isEmpty()) {
             int limit = Math.min(logs.size(), MAX_LIST_ITEMS);
             for (int i = 0; i < limit; i++) {
                 DietDto log = logs.get(i);
@@ -258,15 +293,55 @@ public class AiService {
                                 log.getMealType();
                 menuName = sanitizeForPrompt(menuName);
                 double kcal = (log.getTotalKcal() != null) ? log.getTotalKcal() : 0.0;
-                sb.append(menuName).append("(").append((int) kcal).append("kcal), ");
+                foodHistory.append(menuName).append("(").append((int) Math.round(kcal))
+                        .append("kcal), ");
             }
-            prompt = "오늘 먹은 음식: " + sb + ". 부족한 영양소를 추측해서 다음 끼니 메뉴 3가지를 추천해줘.";
+        }
+
+        // 3. 디테일 프롬프트 구성
+        String prompt = String.format(
+                "내 신체정보는 %d세 %s(키 %dcm, 몸무게 %dkg), 활동량 %s, 식이목표: %s, 질환: %s, 알레르기: %s야. "
+                        + "1일 권장 섭취량은 %d kcal(탄수 %d g, 단백 %d g, 지방 %d g)이야. ",
+                age, gender, height, weight,
+                activityLabel, goalLabel, diseaseLabel, allergyLabel,
+                recKcal, recCarbs, recProtein, recFat
+        );
+
+        if (foodHistory.length() == 0) {
+            prompt += "오늘 식사 이력이 없어. 내 건강 상태를 반영해서 다음 끼니로 가볍고 건강한 메뉴 3가지를 (질환/알러지 유의하여) 추천해줘.";
+        } else {
+            prompt += "오늘 먹은 음식: " + foodHistory +
+                    "부족할 수 있는 영양소와 내 몸 상태(질환/알레르기/신체)를 종합해 다음 끼니 메뉴 3가지(가능하면 한식 위주로, 금지성분은 반드시 빼고) 추천해줘.";
         }
 
         String finalPrompt = sanitizeForPrompt(prompt);
         return safeAiCall("recommendNextMeal",
                 () -> visionClient.prompt().user(finalPrompt).call().content(),
                 FALLBACK_RECOMMEND_MSG);
+    }
+
+    // 한글 변환 예시 메서드 (실 프로젝트 용어에 맞게)
+    private String activityLevelKor(String level) {
+        if ("LOW".equals(level)) {
+            return "낮음";
+        }
+        if ("NORMAL".equals(level)) {
+            return "보통";
+        }
+        if ("HIGH".equals(level)) {
+            return "높음";
+        }
+        return "미상";
+    }
+
+    private String dietGoalKor(String goal) {
+        if ("LOSS".equals(goal)) {
+            return "감량";
+        }
+        if ("GAIN".equals(goal)) {
+            return "증량";
+        }
+        return "유지";
     }
 
     // 3) 일간 리포트 (✅ 500 방지)
@@ -289,22 +364,52 @@ public class AiService {
         if (dailyLogs == null || dailyLogs.isEmpty()) {
             aiMessage = "기록된 식단이 없습니다. 오늘의 식사를 기록해보세요!";
         } else {
-            StringBuilder sb = new StringBuilder("오늘 식단 리스트:\n");
-            double totalKcal = 0;
+            // ===== 1. 개인 건강 정보 준비 =====
+            MemberDto member = memberService.getMember(userId);
+            MemberGoalDto goal = healthService.calculateHealthMetrics(member);
 
+            String diseaseLabel = optionService.diseaseNames(member.getDiseaseIds());
+            String allergyLabel = optionService.allergyNames(member.getAllergyIds());
+            String gender = "M".equalsIgnoreCase(member.getGender()) ? "남성" : "여성";
+            int age = LocalDate.now().getYear() - member.getBirthYear();
+            int height = member.getHeight() != null ? member.getHeight().intValue() : 0;
+            int weight = member.getWeight() != null ? member.getWeight().intValue() : 0;
+            String activityLabel = activityLevelKor(member.getActivityLevel());
+            String goalLabel = dietGoalKor(member.getDietGoal());
+
+            long recKcal = Math.round(goal.getRecCalories());
+            long recCarbs = Math.round(goal.getRecCarbs());
+            long recProtein = Math.round(goal.getRecProtein());
+            long recFat = Math.round(goal.getRecFat());
+
+            // ===== 2. 오늘 먹은 음식/칼로리 등 기존 요약 =====
+            StringBuilder sb = new StringBuilder("오늘 먹은 식사 내역:\n");
+            double totalKcal = 0;
             int limit = Math.min(dailyLogs.size(), MAX_LIST_ITEMS);
             for (int i = 0; i < limit; i++) {
                 DietDto d = dailyLogs.get(i);
                 String menuName = (d.getMemo() != null && !d.getMemo().isEmpty()) ? d.getMemo() :
                         d.getMealType();
                 menuName = sanitizeForPrompt(menuName);
-
                 double kcal = (d.getTotalKcal() != null) ? d.getTotalKcal() : 0.0;
-                sb.append("- ").append(menuName).append(" (").append((int) kcal).append("kcal)\n");
+                sb.append("- ").append(menuName).append(" (").append((int) Math.round(kcal))
+                        .append("kcal)\n");
                 totalKcal += kcal;
             }
 
-            String prompt = sb + "\n총 " + (int) totalKcal + "kcal. 영양 균형 조언 3줄 요약해줘.";
+            // ===== 3. 디테일 프롬프트 세팅 =====
+            String prompt = String.format(
+                    "내 신체정보는 %d세 %s(키 %dcm, 몸무게 %dkg), 활동량 %s, 목표: %s, 질환: %s, 알레르기: %s.\n" +
+                            "1일 권장 섭취: %d kcal (탄수 %d g, 단백 %d g, 지방 %d g).\n\n" +
+                            "%s\n" +
+                            "총 섭취 칼로리: %d kcal.\n" +
+                            "오늘 내 식단을 건강/균형/질병 및 알레르기 관점에서 분석해서, 부족 or 과한 영양소와 유의사항, 건강 개선 TIP을 각각 한 문장씩(총 3문장) 조언해줘. (의학/영양사 관점으로 현실적으로.)",
+                    age, gender, height, weight, activityLabel, goalLabel, diseaseLabel,
+                    allergyLabel,
+                    recKcal, recCarbs, recProtein, recFat,
+                    sb, (int) Math.round(totalKcal)
+            );
+
             aiMessage = safeAiCall("dailyReport",
                     () -> visionClient.prompt().user(sanitizeForPrompt(prompt)).call().content(),
                     FALLBACK_REPORT_MSG);
@@ -320,7 +425,7 @@ public class AiService {
                 .type("DAILY").dateRange(date).dailyMeals(dailyLogs)
                 .aiAnalysis(aiMessage).build();
     }
-    
+
 
     @Transactional
     public AiReportResponse getPeriodReport(Long userId, String type) {
@@ -363,20 +468,51 @@ public class AiService {
 
         String periodName = type.equals("WEEKLY") ? "지난 1주" : "지난 1달";
 
-        String prompt = """
-                너는 식단 점수 데이터를 기반으로 %s 리포트를 작성하는 코치다.
-                
-                [규칙]
-                - 점수리스트에 근거해서만 말해라. 과장/추측 금지.
-                - 6~10줄 이내 한국어로만 작성.
-                - 제목/마크다운/코드블록/이모지 금지.
-                
-                [입력]
-                기간: %s
-                평균점수: %.1f
-                점수리스트: %s
-                """.formatted(type.equals("WEEKLY") ? "주간" : "월간",
-                periodName, avgScore, scores.toString());
+        // ========== [추가] 내 신체/건강/권장치 정보 ==========
+        MemberDto member = memberService.getMember(userId);
+        MemberGoalDto goal = healthService.calculateHealthMetrics(member);
+
+        String diseaseLabel = optionService.diseaseNames(member.getDiseaseIds());
+        String allergyLabel = optionService.allergyNames(member.getAllergyIds());
+        String gender = "M".equalsIgnoreCase(member.getGender()) ? "남성" : "여성";
+        int age = LocalDate.now().getYear() - member.getBirthYear();
+        int height = member.getHeight() != null ? member.getHeight().intValue() : 0;
+        int weight = member.getWeight() != null ? member.getWeight().intValue() : 0;
+        String activityLabel = activityLevelKor(member.getActivityLevel());
+        String goalLabel = dietGoalKor(member.getDietGoal());
+
+        long recKcal = Math.round(goal.getRecCalories());
+        long recCarbs = Math.round(goal.getRecCarbs());
+        long recProtein = Math.round(goal.getRecProtein());
+        long recFat = Math.round(goal.getRecFat());
+
+        // =========== [추가] 식사 총계/평균 등 통계 ===========
+        int mealCount = logs.size();
+        double totalKcal =
+                logs.stream().mapToDouble(d -> (d.getTotalKcal() != null) ? d.getTotalKcal() : 0.0)
+                        .sum();
+        double avgKcal = mealCount == 0 ? 0 : Math.round(totalKcal / mealCount);
+
+        String prompt = String.format(
+                "내 신체: %d세 %s(키 %dcm, 몸무게 %dkg), 활동량 %s, 목표 %s, 질환: %s, 알레르기: %s.\n" +
+                        "1일 권장 섭취: %d kcal (탄수 %d g, 단백 %d g, 지방 %d g)\n" +
+                        "[입력]\n" +
+                        "%s 동안의 식사 횟수: %d, 총섭취 칼로리(합): %d kcal, 1회 평균 섭취: %d kcal\n" +
+                        "평균 식단 점수: %.1f\n" +
+                        "점수 리스트: %s\n\n" +
+                        "[미션]\n" +
+                        "%s간 내 '식사점수/영양/섭취패턴/나의 건강정보(질병·알러지 포함)'를 종합해,\n" +
+                        "- 내 식습관 강점 1~2개\n" +
+                        "- 영양상 부족/과잉/불균형 위험\n" +
+                        "- 질환/알러지 관점 주의점\n" +
+                        "- 실질적인 건강개선 팁/가이드 (식단 구성 힌트 포함)\n" +
+                        "위 내용을 총 8줄 이내, 현실적이고 구체적인 한국어로 써줘. 의학적 코멘트 환영, 과장/너무 일반적 금지.",
+                age, gender, height, weight, activityLabel, goalLabel, diseaseLabel, allergyLabel,
+                recKcal, recCarbs, recProtein, recFat,
+                periodName, mealCount, (int) Math.round(totalKcal), (int) avgKcal,
+                avgScore, scores.toString(),
+                periodName
+        );
 
         String aiMessage = safeAiCall("periodReport",
                 () -> reportClient.prompt().user(sanitizeForPrompt(prompt)).call().content(),
@@ -436,7 +572,7 @@ public class AiService {
         double myKcal = getSafeDouble(myStats, "avgKcal");
         double rankerScore = getSafeDouble(rankerStats, "avgScore");
         double rankerKcal = getSafeDouble(rankerStats, "avgKcal");
-        double goalKcal = 2000.0;
+        double goalKcal = 2000.0; // 목표 칼로리, 추후 MemberGoalDto에서 가져와도 됨
 
         ReportLogDto cached = reportDao.selectExistingReport(userId, "GAP_ANALYSIS", sDate, eDate);
         String aiMessage;
@@ -447,9 +583,37 @@ public class AiService {
             if (myScore == 0 && myKcal == 0) {
                 aiMessage = "아직 충분한 식단 기록이 없습니다. 식단을 꾸준히 기록하면 분석해드릴게요!";
             } else {
+                // ---- 내 건강정보/질병/알러지/목표까지 포함 --------
+                MemberDto member = memberService.getMember(userId);
+                MemberGoalDto goal = healthService.calculateHealthMetrics(member);
+
+                String diseaseLabel = optionService.diseaseNames(member.getDiseaseIds());
+                String allergyLabel = optionService.allergyNames(member.getAllergyIds());
+                String gender = "M".equalsIgnoreCase(member.getGender()) ? "남성" : "여성";
+                int age = LocalDate.now().getYear() - member.getBirthYear();
+                int height = member.getHeight() != null ? member.getHeight().intValue() : 0;
+                int weight = member.getWeight() != null ? member.getWeight().intValue() : 0;
+                String activityLabel = activityLevelKor(member.getActivityLevel());
+                String goalLabel = dietGoalKor(member.getDietGoal());
+
+                long recKcal = Math.round(goal.getRecCalories());
+
+                String periodName = "MONTHLY".equals(type) ? "지난 1개월" : "지난 1주일";
+
                 String prompt = String.format(
-                        "나(평균 %.1f점, %.0fkcal) vs 랭커(평균 %.1f점, %.0fkcal) vs 목표(%.0fkcal). " +
-                                "내가 부족한 점과 잘한 점을 비교 분석하고 동기부여해줘. 3줄 요약.",
+                        "당신은 영양사/건강코치입니다.\n" +
+                                "아래는 %s간 나와 그룹 랭커(상위권 사용자) 비교 분석 결과입니다.\n" +
+                                "[나 정보] %d세 %s(키 %dcm, 몸무게 %dkg), 질환: %s, 알레르기: %s, 목표: %s, 권장칼로리: %d kcal\n" +
+                                "[나] 평균점수: %.1f, 평균칼로리: %.0f kcal\n" +
+                                "[랭커] 평균점수: %.1f, 평균칼로리: %.0f kcal\n" +
+                                "[목표] 칼로리: %.0f kcal\n" +
+                                "[미션] 점수·칼로리·내 신체·질환/알러지 등 내 정보를 반영하여\n" +
+                                "- 내 식습관상 부족/강점 1~2줄\n" +
+                                "- 랭커와 직접 비교했을 때 차이점/예시\n" +
+                                "- 건강개선 actionable tip/멘트 1줄\n" +
+                                "총 4줄을 현실감 있게 요약. 너무 추상적이거나 뻔하지 않게 당부.",
+                        periodName, age, gender, height, weight, diseaseLabel, allergyLabel,
+                        goalLabel, recKcal,
                         myScore, myKcal, rankerScore, rankerKcal, goalKcal
                 );
 

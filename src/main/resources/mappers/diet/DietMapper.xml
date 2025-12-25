@@ -74,7 +74,7 @@
                d.total_fat,
                d.score,
                d.ai_analysis,
-        
+
                dd.detail_id,
                dd.food_code,
                dd.food_name,
@@ -96,6 +96,7 @@
                d.eat_date,
                d.eat_time,
                d.meal_type,
+               d.diet_img,
                d.memo,
                d.total_kcal,
                d.total_carbs,
@@ -124,6 +125,7 @@
                d.eat_date,
                d.eat_time,
                d.meal_type,
+               d.diet_img,
                d.memo,
                d.total_kcal,
                d.total_carbs,
@@ -152,6 +154,7 @@
                d.eat_date,
                d.eat_time,
                d.meal_type,
+               d.diet_img,
                d.memo,
                d.total_kcal,
                d.total_carbs,
