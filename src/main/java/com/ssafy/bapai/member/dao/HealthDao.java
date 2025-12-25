@@ -28,4 +28,8 @@ public interface HealthDao {
 
     void insertMemberAllergies(@Param("userId") Long userId,
                                @Param("allergyIds") List<Integer> allergyIds);
+
+    List<String> selectDiseaseNamesByIds(@Param("ids") List<Integer> ids);
+
+    List<String> selectAllergyNamesByIds(@Param("ids") List<Integer> ids);
 }
