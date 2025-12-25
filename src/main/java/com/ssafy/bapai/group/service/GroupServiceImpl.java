@@ -1,5 +1,6 @@
 package com.ssafy.bapai.group.service;
 
+import com.ssafy.bapai.common.dto.PageResponse;
 import com.ssafy.bapai.group.dao.GroupDao;
 import com.ssafy.bapai.group.dto.GroupDto;
 import com.ssafy.bapai.group.dto.GroupRankDto;
@@ -57,64 +58,119 @@ public class GroupServiceImpl implements GroupService {
     }
 
     @Override
-    public List<GroupDto> getList(String keyword, int page, int size, Long userId) {
+    public PageResponse<GroupDto> getList(String keyword, int page, int size, Long userId) {
         Map<String, Object> params = new HashMap<>();
 
-        // 페이지네이션 계산
         int offset = (page - 1) * size;
         params.put("limit", size);
         params.put("offset", offset);
 
+        List<String> keywordList = null;
         if (keyword != null && !keyword.trim().isEmpty()) {
-            params.put("keywordList", Arrays.asList(keyword.split("[\\s,]+")));
+            keywordList = Arrays.asList(keyword.split("[\\s,]+"));
+            params.put("keywordList", keywordList);
         }
 
+        // 1. 목록 조회
         List<GroupDto> list = groupDao.selectGroupList(params);
 
+//        for (GroupDto g : list) {
+//            g.setTags(groupDao.selectGroupTags(g.getGroupId()));
+//            if (userId != null) {
+//                g.setJoined(groupDao.checkJoined(g.getGroupId(), userId) > 0);
+//                g.setOwner(g.getOwnerId().equals(userId));
+//            }
+//        }
         for (GroupDto g : list) {
             g.setTags(groupDao.selectGroupTags(g.getGroupId()));
             if (userId != null) {
-                // 가입 여부 체크
-                g.setJoined(groupDao.checkJoined(g.getGroupId(), userId) > 0);
-                // 방장 여부 체크: ownerId와 로그인한 userId 비교
-                g.setOwner(g.getOwnerId().equals(userId));
+                String role = groupDao.selectMyRole(g.getGroupId(), userId);
+                if (role == null) {
+                    role = "NONE";
+                }
+                g.setRole(role);
+            } else {
+                g.setRole("NONE");
             }
         }
-        return list;
+        // 2. 전체 개수 조회
+        long totalElements = groupDao.countAllGroups(keywordList);
+
+        // 3. PageResponse 생성
+        return new PageResponse<>(list, page, size, totalElements);
     }
+//    @Override
+//    public List<GroupDto> getList(String keyword, int page, int size, Long userId) {
+//        Map<String, Object> params = new HashMap<>();
+//
+//        // 페이지네이션 계산
+//        int offset = (page - 1) * size;
+//        params.put("limit", size);
+//        params.put("offset", offset);
+//
+//        if (keyword != null && !keyword.trim().isEmpty()) {
+//            params.put("keywordList", Arrays.asList(keyword.split("[\\s,]+")));
+//        }
+//
+//        List<GroupDto> list = groupDao.selectGroupList(params);
+//
+//        for (GroupDto g : list) {
+//            g.setTags(groupDao.selectGroupTags(g.getGroupId()));
+//            if (userId != null) {
+//                // 가입 여부 체크
+//                g.setJoined(groupDao.checkJoined(g.getGroupId(), userId) > 0);
+//                // 방장 여부 체크: ownerId와 로그인한 userId 비교
+//                g.setOwner(g.getOwnerId().equals(userId));
+//            }
+//        }
+//        return list;
+//    }
 
 
     @Override
     public GroupDto getDetail(Long groupId, Long userId) {
         GroupDto group = groupDao.selectGroupDetail(groupId);
+//        if (group != null) {
+//            group.setTags(groupDao.selectGroupTags(groupId));
+//            if (userId != null) {
+//                group.setJoined(groupDao.checkJoined(groupId, userId) > 0);
+//                group.setOwner(group.getOwnerId().equals(userId));
+//            }
+//        }
+
         if (group != null) {
             group.setTags(groupDao.selectGroupTags(groupId));
             if (userId != null) {
-                group.setJoined(groupDao.checkJoined(groupId, userId) > 0);
-                group.setOwner(group.getOwnerId().equals(userId));
+                String role = groupDao.selectMyRole(groupId, userId);
+                if (role == null) {
+                    role = "NONE";
+                }
+                group.setRole(role);
+            } else {
+                group.setRole("NONE");
             }
         }
         return group;
     }
 
-    @Override
-    @Transactional
-    public void joinGroup(Long groupId, Long userId) {
-        GroupDto group = groupDao.selectGroupDetail(groupId);
-        if ("PRIVATE".equals(group.getType())) {
-            // 비공개일 경우 가입 신청 테이블(별도 필요)에 넣거나 로직 처리
-            // 여기서는 비공개 시 즉시 가입을 막는 예시만 작성
-            throw new IllegalStateException("비공개 모임은 관리자(그룹장)의 승인이 필요합니다.");
-        }
-        if (groupDao.checkJoined(groupId, userId) > 0) {
-            throw new IllegalStateException("이미 가입했습니다.");
-        }
-
-        if (groupDao.countMembers(groupId) >= group.getMaxMember()) {
-            throw new IllegalStateException("정원 초과입니다.");
-        }
-        groupDao.insertGroupMember(groupId, userId, "MEMBER");
-    }
+//    @Override
+//    @Transactional
+//    public void joinGroup(Long groupId, Long userId) {
+//        GroupDto group = groupDao.selectGroupDetail(groupId);
+//        if ("PRIVATE".equals(group.getType())) {
+//            // 비공개일 경우 가입 신청 테이블(별도 필요)에 넣거나 로직 처리
+//            // 여기서는 비공개 시 즉시 가입을 막는 예시만 작성
+//            throw new IllegalStateException("비공개 모임은 관리자(그룹장)의 승인이 필요합니다.");
+//        }
+//        if (groupDao.checkJoined(groupId, userId) > 0) {
+//            throw new IllegalStateException("이미 가입했습니다.");
+//        }
+//
+//        if (groupDao.countMembers(groupId) >= group.getMaxMember()) {
+//            throw new IllegalStateException("정원 초과입니다.");
+//        }
+//        groupDao.insertGroupMember(groupId, userId, "MEMBER");
+//    }
 
     @Override
     public void leaveGroup(Long groupId, Long userId) {
@@ -138,9 +194,18 @@ public class GroupServiceImpl implements GroupService {
     @Override
     @Transactional
     public void delegateOwner(Long groupId, Long currentOwnerId, Long newOwnerId) {
+        // 1. 현재방장 권한 확인
         if (!"LEADER".equals(groupDao.selectMyRole(groupId, currentOwnerId))) {
             throw new IllegalStateException("권한 없음");
         }
+        // 2. newOwner의 그룹내 역할 가져오기
+        String toRole = groupDao.selectMyRole(groupId, newOwnerId);
+
+        // 3. 반드시 member만 가능하게 제한
+        if (!"MEMBER".equals(toRole)) {
+            throw new IllegalStateException("위임 대상은 MEMBER로 이미 가입된 사용자여야 합니다.");
+        }
+        // 4. 기존 owner는 MEMBER로, newOwner는 LEADER로
         groupDao.updateMemberRole(groupId, currentOwnerId, "MEMBER");
         groupDao.updateMemberRole(groupId, newOwnerId, "LEADER");
         groupDao.updateGroupOwner(groupId, newOwnerId);
@@ -160,16 +225,45 @@ public class GroupServiceImpl implements GroupService {
         return groupDao.selectHashtagList(keyword);
     }
 
+    //    @Override
+//    public List<GroupDto> getMyGroups(Long userId) {
+//        List<GroupDto> list = groupDao.selectMyGroups(userId);
+//        for (GroupDto g : list) {
+//            g.setTags(groupDao.selectGroupTags(g.getGroupId()));
+//            // 내 그룹 목록이므로 가입은 무조건 true, 방장 여부만 계산
+//            g.setJoined(true);
+//            g.setOwner(g.getOwnerId().equals(userId));
+//        }
+//        return list;
+//    }
     @Override
-    public List<GroupDto> getMyGroups(Long userId) {
-        List<GroupDto> list = groupDao.selectMyGroups(userId);
+    public PageResponse<GroupDto> getMyGroups(Long userId, int page, int size) {
+        // 1. 페이지네이션 계산
+        int offset = (page - 1) * size;
+
+        // 2. 목록 조회 (limit/offset 적용)
+        List<GroupDto> list = groupDao.selectMyGroupsPaged(userId, size, offset);
+//
+//        for (GroupDto g : list) {
+//            g.setTags(groupDao.selectGroupTags(g.getGroupId()));
+//            g.setJoined(true);
+//            g.setOwner(g.getOwnerId().equals(userId));
+//        }
         for (GroupDto g : list) {
             g.setTags(groupDao.selectGroupTags(g.getGroupId()));
-            // 내 그룹 목록이므로 가입은 무조건 true, 방장 여부만 계산
-            g.setJoined(true);
-            g.setOwner(g.getOwnerId().equals(userId));
+
+            String role = groupDao.selectMyRole(g.getGroupId(), userId);
+            if (role == null) {
+                role = "NONE";
+            }
+            g.setRole(role);
         }
-        return list;
+
+        // 3. 전체 개수 조회 (카운트 쿼리)
+        long totalElements = groupDao.countMyGroups(userId);
+
+        // 4. PageResponse 생성(자동 계산)
+        return new PageResponse<>(list, page, size, totalElements);
     }
 
     @Override
@@ -201,4 +295,136 @@ public class GroupServiceImpl implements GroupService {
         // GroupDao에서도 List<MemberDto>를 반환해야 함
         return groupDao.searchUsersByNickname(nickname, groupId);
     }
+
+//    @Override
+//    public void updateGroup(GroupDto groupDto) {
+//
+//        try {
+//            groupDao.updateGroup(groupDto);
+//        } catch (BadSqlGrammarException e) {
+//            // 값이 전부 null이라면 SET절 없는 오류를 무시하고
+//        }
+//
+//    }
+
+    @Override
+    public void updateGroup(GroupDto groupDto) {
+        boolean hasMainFields =
+                groupDto.getName() != null ||
+                        groupDto.getDescription() != null ||
+                        groupDto.getImgUrl() != null ||
+                        groupDto.getMaxMember() != null ||
+                        (groupDto.getType() != null && !groupDto.getType().isEmpty());
+
+        if (hasMainFields) {
+            groupDao.updateGroup(groupDto);
+        }
+        // [태그 처리]
+        if (groupDto.getTags() != null) {
+            // tags가 비어있으면 "태그 전체 삭제"
+            groupDao.deleteAllGroupHashtags(groupDto.getGroupId());
+
+            // tags가 1개라도 있으면 다시 insert
+            if (!groupDto.getTags().isEmpty()) {
+                for (String tag : groupDto.getTags()) {
+                    Long tagId = groupDao.selectTagIdByName(tag);
+                    if (tagId == null) {
+                        Map<String, Object> params = new HashMap<>();
+                        params.put("name", tag);
+                        groupDao.insertHashtag(params);
+                        Object idObj = params.get("tagId");
+                        if (idObj != null) {
+                            tagId = Long.valueOf(String.valueOf(idObj));
+                        }
+                    }
+                    if (tagId != null) {
+                        groupDao.insertGroupHashtag(groupDto.getGroupId(), tagId);
+                    }
+                }
+            }
+            // tags == [] 일 때는 insert가 스킵되고, 전체 삭제됨 ⇒ 즉 "모든 태그 삭제"
+        }
+
+        if (!hasMainFields && groupDto.getTags() == null) {
+            throw new IllegalArgumentException("수정할 값이 1개 이상 필요합니다.");
+        }
+    }
+
+    @Override
+    @Transactional
+    public void joinGroup(Long groupId, Long userId) {
+        GroupDto group = groupDao.selectGroupDetail(groupId);
+        if (groupDao.checkJoined(groupId, userId) > 0) {
+            throw new IllegalStateException("이미 신청/가입된 사용자입니다.");
+        }
+        if (groupDao.countMembers(groupId) >= group.getMaxMember()) {
+            throw new IllegalStateException("정원 초과입니다.");
+        }
+        if ("PRIVATE".equals(group.getType())) {
+            // WAIT 상태로 넣기
+            groupDao.insertGroupMember(groupId, userId, "WAIT");
+        } else {
+            groupDao.insertGroupMember(groupId, userId, "MEMBER");
+        }
+    }
+
+
+    /**
+     * 비공개 그룹 - 가입 대기자 목록 조회 (그룹장만 접근)
+     */
+    @Override
+    public List<MemberDto> getPendingMembers(Long groupId, Long ownerId) {
+        GroupDto group = groupDao.selectGroupDetail(groupId);
+        if (!group.getOwnerId().equals(ownerId)) {
+            throw new IllegalStateException("권한 없음");
+        }
+        // group_member.role = 'WAIT'인 사용자만 조회 (MyBatis에 selectPendingMembers 구현 필요)
+        return groupDao.selectPendingMembers(groupId);
+    }
+
+    /**
+     * 비공개 그룹 - 가입 승인 (그룹장만)
+     */
+    @Override
+    @Transactional
+    public void approveJoin(Long groupId, Long userId, Long ownerId) {
+        GroupDto group = groupDao.selectGroupDetail(groupId);
+        if (!group.getOwnerId().equals(ownerId)) {
+            throw new IllegalStateException("권한 없음");
+        }
+        // role = 'WAIT' -> 'MEMBER'
+        groupDao.updateMemberRole(groupId, userId, "MEMBER");
+    }
+
+    /**
+     * 비공개 그룹 - 가입 거절 (그룹장만)
+     */
+    @Override
+    @Transactional
+    public void rejectJoin(Long groupId, Long userId, Long ownerId) {
+        GroupDto group = groupDao.selectGroupDetail(groupId);
+        if (!group.getOwnerId().equals(ownerId)) {
+            throw new IllegalStateException("권한 없음");
+        }
+        // 대기자 삭제
+        groupDao.deleteGroupMember(groupId, userId);
+    }
+
+    @Override
+    @Transactional
+    public void removeGroup(Long groupId, Long userId) {
+
+        String role = groupDao.selectMyRole(groupId, userId);
+
+        // 수정: "OWNER" -> "LEADER"
+        if (!"LEADER".equals(role)) {
+            throw new RuntimeException("그룹장만 그룹을 삭제할 수 있습니다.");
+        }
+
+        // 2. 연관 데이터 삭제
+        groupDao.deleteAllGroupHashtags(groupId);
+        groupDao.deleteAllGroupMembers(groupId);
+        groupDao.deleteGroup(groupId);
+    }
+
 }

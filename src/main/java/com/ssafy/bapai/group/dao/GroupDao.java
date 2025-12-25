@@ -55,8 +55,28 @@ public interface GroupDao {
     List<GroupDto> selectMyGroups(Long userId);
 
     List<MemberDto> selectGroupMembers(Long groupId);
-    
+
+    void updateGroup(GroupDto groupDto);
 
     List<MemberDto> searchUsersByNickname(@Param("nickname") String nickname,
                                           @Param("groupId") Long groupId);
+
+    List<GroupDto> selectMyGroupsPaged(@Param("userId") Long userId, @Param("limit") int limit,
+                                       @Param("offset") int offset);
+
+    long countMyGroups(@Param("userId") Long userId);
+
+    long countAllGroups(@Param("keywordList") List<String> keywordList);
+
+    List<MemberDto> selectPendingMembers(@Param("groupId") Long groupId);
+
+    void deleteAllGroupHashtags(Long groupId);
+
+
+    void deleteAllGroupMembers(long groupId);
+
+    void deleteAllGroupHashtags(long groupId);
+
+
+    void deleteGroup(long groupId);
 }

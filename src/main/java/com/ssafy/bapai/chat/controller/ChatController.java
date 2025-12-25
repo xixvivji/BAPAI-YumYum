@@ -15,8 +15,10 @@ public class ChatController {
 
     @MessageMapping("/chat/message")
     public void message(ChatMessageDto message) {
+
         chatService.saveMessage(message); // DB 저장
-        // /sub/chat/room/{groupId}를 구독하는 모든 유저에게 메시지 전송
+        
         messagingTemplate.convertAndSend("/sub/chat/room/" + message.getGroupId(), message);
     }
+
 }

@@ -1,5 +1,7 @@
 package com.ssafy.bapai.chat.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -12,8 +14,16 @@ import lombok.NoArgsConstructor;
 public class ChatMessageDto {
     private Long chatId;
     private Long groupId;
+
+    @JsonProperty("senderId")
     private Long userId;
-    private String senderName; // 닉네임 표시용
+
+    @JsonProperty("senderNickname")
+    private String senderName;
+
+    @JsonProperty("content")
     private String message;
-    private String createdAt;
+
+    @JsonProperty("timestamp")
+    private LocalDateTime createdAt;
 }
