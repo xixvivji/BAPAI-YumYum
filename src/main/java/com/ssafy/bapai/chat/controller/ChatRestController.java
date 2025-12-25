@@ -27,10 +27,11 @@ public class ChatRestController {
         return ResponseEntity.ok(chatService.getChatHistory(groupId));
     }
 
-    // 아까 만든 실시간 접속자 조회 (녹색 불)
+    //  실시간 접속자 조회 (녹색 불)
     @GetMapping("/{groupId}/online")
     public ResponseEntity<Set<String>> getOnlineUsers(@PathVariable Long groupId) {
         Set<String> onlineUsers = redisTemplate.opsForSet().members("group:connect:" + groupId);
         return ResponseEntity.ok(onlineUsers != null ? onlineUsers : Collections.emptySet());
     }
+
 }

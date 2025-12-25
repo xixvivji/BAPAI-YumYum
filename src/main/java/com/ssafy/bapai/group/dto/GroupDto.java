@@ -12,7 +12,7 @@ public class GroupDto {
     private String name;
     private String description;
     private String imgUrl;
-    private int maxMember;
+    private Integer maxMember;
     private String type;        // PUBLIC, PRIVATE
     private LocalDateTime createdAt;
 
@@ -22,6 +22,7 @@ public class GroupDto {
     // 화면 표시용 (JOIN 데이터)
     private String ownerName;   // 방장 닉네임
     private int memberCount;    // 현재 인원
-    private boolean isJoined;   // 가입 여부
-    private boolean isOwner;
+    //    private boolean isJoined;   // 가입 여부
+//    private boolean isOwner;
+    private String role;
 }

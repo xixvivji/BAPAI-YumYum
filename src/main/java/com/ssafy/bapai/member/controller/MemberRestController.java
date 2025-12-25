@@ -461,11 +461,17 @@ public class MemberRestController {
     }
 
 
-    // 1. 그룹 멤버 목록 조회
     @GetMapping("/groups/{groupId}/members")
     @Operation(summary = "그룹 멤버 목록 조회")
     public ResponseEntity<List<MemberDto>> getGroupMembers(@PathVariable Long groupId) {
-        return ResponseEntity.ok(groupService.getGroupMembers(groupId));
+        log.info("==== [그룹 멤버 목록 조회 진입] groupId: {}", groupId);
+
+        List<MemberDto> memberList = groupService.getGroupMembers(groupId);
+
+        log.info("==== [조회된 그룹 멤버 수]: {}", memberList.size());
+        log.debug("==== [그룹 멤버 목록]: {}", memberList);    // 상세 자료 찍고 싶을 때
+
+        return ResponseEntity.ok(memberList);
     }
 
     // 2. 초대할 사용자 검색 (닉네임 기준)
