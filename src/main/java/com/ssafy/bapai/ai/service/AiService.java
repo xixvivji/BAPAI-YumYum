@@ -20,6 +20,7 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -356,9 +357,21 @@ public class AiService {
 
         if (cachedLog != null) {
             return AiReportResponse.builder()
-                    .type("DAILY").dateRange(date).dailyMeals(dailyLogs)
-                    .aiAnalysis(cachedLog.getAiMessage()).build();
+                    .type("DAILY")
+                    .dateRange(date)
+                    .dailyMeals(dailyLogs)
+                    .averageScore(cachedLog.getScoreAverage()) // 👈 이 부분이 핵심 (캐시 점수 반환)
+                    .aiAnalysis(cachedLog.getAiMessage())
+                    .build();
         }
+
+        List<Integer> scores = (dailyLogs == null ? new ArrayList<DietDto>() : dailyLogs).stream()
+                .map(diet -> diet.getScore()) // 메서드 참조 대신 직접 호출
+                .filter(s -> s != null && s > 0)
+                .collect(Collectors.toList());
+
+        double avgScore = scores.stream().mapToInt(Integer::intValue).average().orElse(0.0);
+        avgScore = Math.round(avgScore * 10) / 10.0;
 
         String aiMessage;
         if (dailyLogs == null || dailyLogs.isEmpty()) {
@@ -418,14 +431,17 @@ public class AiService {
         if (dailyLogs != null && !dailyLogs.isEmpty()) {
             reportDao.insertReportLog(ReportLogDto.builder()
                     .userId(userId).reportType("DAILY").startDate(date).endDate(date)
-                    .scoreAverage(0.0).aiMessage(aiMessage).build());
+                    .scoreAverage(avgScore).aiMessage(aiMessage).build());
         }
 
         return AiReportResponse.builder()
-                .type("DAILY").dateRange(date).dailyMeals(dailyLogs)
-                .aiAnalysis(aiMessage).build();
+                .type("DAILY")
+                .dateRange(date)
+                .dailyMeals(dailyLogs)
+                .averageScore(avgScore) // 👈 이 부분이 누락되었는지 확인하세요.
+                .aiAnalysis(aiMessage)
+                .build();
     }
-
 
     @Transactional
     public AiReportResponse getPeriodReport(Long userId, String type) {
@@ -648,5 +664,43 @@ public class AiService {
         return msg.equals(FALLBACK_REPORT_MSG)
                 || msg.equals(FALLBACK_RECOMMEND_MSG)
                 || msg.equals(FALLBACK_GAP_MSG);
+    }
+
+    public int calculateDietScore(Long userId, DietDto dietDto) {
+        try {
+            MemberDto member = memberService.getMember(userId);
+            MemberGoalDto goal = healthService.calculateHealthMetrics(member);
+
+            // 1. 달성률 및 비율 계산 (Java에서 미리 수행)
+            double kcalRate = (dietDto.getTotalKcal() / goal.getRecCalories()) * 100;
+            double carbsRate = (dietDto.getTotalCarbs() / goal.getRecCarbs()) * 100;
+            double proteinRate = (dietDto.getTotalProtein() / goal.getRecProtein()) * 100;
+            double fatRate = (dietDto.getTotalFat() / goal.getRecFat()) * 100;
+
+            // 2. 고도화된 프롬프트 구성
+            String prompt = String.format(
+                    "당신은 영양 분석 전문가입니다. 아래 데이터를 바탕으로 이번 식단의 '영양 적정성' 점수를 산출하세요.\n\n" +
+                            "[사용자 목표] %s (TDEE: %.0f kcal, 권장: %.0f kcal)\n" +
+                            "[이번 식단] %s (%.0f kcal)\n" +
+                            "[일일 권장량 대비 달성률]\n" +
+                            "- 칼로리: %.1f%% 채움\n" +
+                            "- 탄수화물: %.1f%% 채움\n" +
+                            "- 단백질: %.1f%% 채움\n" +
+                            "- 지방: %.1f%% 채움\n\n" +
+                            "위 비율이 한 끼 적정 비중(약 33%%)에 얼마나 부합하는지, 그리고 사용자의 목표(%s)에 도움이 되는 식단인지를 종합하여 " +
+                            "0~100점 사이의 점수 '숫자'만 답하세요.",
+                    dietGoalKor(member.getDietGoal()), goal.getTdee(), goal.getRecCalories(),
+                    dietDto.getMemo(), dietDto.getTotalKcal(),
+                    kcalRate, carbsRate, proteinRate, fatRate,
+                    dietGoalKor(member.getDietGoal())
+            );
+
+            String response = safeAiCall("calculateDietScore",
+                    () -> chatModel.call(sanitizeForPrompt(prompt)), "70");
+
+            return Integer.parseInt(response.replaceAll("[^0-9]", ""));
+        } catch (Exception e) {
+            return 70;
+        }
     }
 }

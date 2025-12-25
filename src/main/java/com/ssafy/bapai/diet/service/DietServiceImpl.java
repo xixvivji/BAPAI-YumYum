@@ -375,6 +375,17 @@ public class DietServiceImpl implements DietService {
         }
     }
 
+    @Transactional
+    public void insertDiet(DietDto dietDto, Long userId) {
+        // AI로부터 개인별 TDEE 기반 점수 획득
+        int aiScore = aiService.calculateDietScore(userId, dietDto);
+
+        dietDto.setUserId(userId);
+        dietDto.setScore(aiScore); // 산출된 점수 세팅
+
+        dietDao.insertDiet(dietDto); // DB 저장 (이 점수가 랭킹에 쓰임)
+    }
+
     private double round(double value) {
         return Math.round(value * 10) / 10.0;
     }

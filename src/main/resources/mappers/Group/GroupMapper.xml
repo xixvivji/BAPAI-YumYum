@@ -21,7 +21,12 @@
         JOIN member m ON t.owner_id = m.user_id
         WHERE 1=1
         <if test="keywordList != null and !keywordList.isEmpty()">
-            AND t.group_id IN (
+            AND (
+            <foreach collection="keywordList" item="kw" separator=" OR ">
+                t.name LIKE CONCAT('%', #{kw}, '%')
+            </foreach>
+            OR
+            t.group_id IN (
             SELECT gh.group_id
             FROM group_hashtags gh
             JOIN hashtags h ON gh.tag_id = h.tag_id
@@ -30,29 +35,34 @@
                 #{kw}
             </foreach>
             GROUP BY gh.group_id
-            HAVING COUNT(DISTINCT h.name) = ${keywordList.size}
+            HAVING COUNT(DISTINCT h.name) = #{keywordListSize}
+            )
             )
         </if>
         ORDER BY t.created_at DESC
         LIMIT #{limit} OFFSET #{offset}
     </select>
 
-    <!--!! 추가: 전체 그룹 개수(변수명 통일) -->
+
     <select id="countAllGroups" resultType="long">
         SELECT COUNT(*)
         FROM `groups` t
         WHERE 1=1
         <if test="keywordList != null and !keywordList.isEmpty()">
-            AND t.group_id IN (
+            AND (
+            <foreach collection="keywordList" item="kw" separator=" OR ">
+                t.name LIKE CONCAT('%', #{kw}, '%')
+            </foreach>
+            OR
+            t.group_id IN (
             SELECT gh.group_id
             FROM group_hashtags gh
             JOIN hashtags h ON gh.tag_id = h.tag_id
             WHERE h.name IN
-            <foreach collection="keywordList" item="kw" open="(" separator="," close=")">
-                #{kw}
-            </foreach>
+            <foreach collection="keywordList" item="kw" open="(" separator="," close=")">#{kw}</foreach>
             GROUP BY gh.group_id
-            HAVING COUNT(DISTINCT h.name) = ${keywordList.size}
+            HAVING COUNT(DISTINCT h.name) = #{keywordListSize}
+            )
             )
         </if>
     </select>
@@ -119,17 +129,33 @@
           AND user_id = #{userId}
     </update>
 
-    <select id="selectGroupRanking" resultType="com.ssafy.bapai.group.dto.GroupRankDto">
-        SELECT m.user_id, m.nickname, IFNULL(SUM(r.score), 0) as totalScore, COUNT(r.report_id) as reportCount
+    <select id="selectGroupRankingByDiet" resultType="com.ssafy.bapai.group.dto.GroupRankDto">
+        SELECT
+        m.user_id AS userId,
+        m.nickname,
+        m.profile_img AS profileImg,
+        IFNULL(SUM(d.score), 0) AS totalScore,
+        COUNT(d.diet_id) AS dietCount
         FROM group_member gm
-                 JOIN member m ON gm.user_id = m.user_id
-                 LEFT JOIN report r ON m.user_id = r.user_id
+        JOIN member m ON gm.user_id = m.user_id
+        LEFT JOIN diet d ON m.user_id = d.user_id
         WHERE gm.group_id = #{groupId}
+        AND gm.role != 'WAIT'
+        <choose>
+            <when test="period == 'daily'">
+                AND d.eat_date = CURDATE()
+            </when>
+            <when test="period == 'weekly'">
+                AND d.eat_date BETWEEN DATE_SUB(CURDATE(), INTERVAL 7 DAY) AND CURDATE()
+            </when>
+            <when test="period == 'monthly'">
+                AND d.eat_date LIKE CONCAT(#{currentMonth}, '%')
+            </when>
+        </choose>
         GROUP BY m.user_id
         ORDER BY totalScore DESC
         LIMIT #{limit}
     </select>
-
     <insert id="insertGroupHashtag">
         INSERT INTO group_hashtags (group_id, tag_id)
         VALUES (#{groupId}, #{tagId})
@@ -233,7 +259,7 @@
         FROM group_hashtags
         WHERE group_id = #{groupId}
     </delete>
-    
+
 
     <delete id="deleteAllGroupMembers" parameterType="long">
         DELETE

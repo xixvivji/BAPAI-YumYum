@@ -74,7 +74,6 @@
                d.total_fat,
                d.score,
                d.ai_analysis,
-
                dd.detail_id,
                dd.food_code,
                dd.food_name,
@@ -89,7 +88,7 @@
           AND d.eat_date = #{date}
         ORDER BY d.eat_time ASC, d.diet_id ASC
     </select>
-
+    
     <select id="selectWeeklyDiets" resultMap="DietResultMap">
         SELECT d.diet_id,
                d.user_id,
@@ -119,34 +118,6 @@
         ORDER BY d.eat_date ASC, d.meal_type ASC
     </select>
 
-    <select id="selectMonthlyDiets" resultMap="DietResultMap">
-        SELECT d.diet_id,
-               d.user_id,
-               d.eat_date,
-               d.eat_time,
-               d.meal_type,
-               d.diet_img,
-               d.memo,
-               d.total_kcal,
-               d.total_carbs,
-               d.total_protein,
-               d.total_fat,
-               d.score,
-               d.ai_analysis,
-               dd.detail_id,
-               dd.food_code,
-               dd.food_name,
-               dd.amount,
-               dd.kcal,
-               dd.carbs,
-               dd.protein,
-               dd.fat
-        FROM diet d
-                 LEFT JOIN diet_detail dd ON d.diet_id = dd.diet_id
-        WHERE d.user_id = #{userId}
-          AND d.eat_date LIKE CONCAT(#{month}, '%')
-        ORDER BY d.eat_date DESC
-    </select>
 
     <select id="selectAllDiets" resultMap="DietResultMap">
         SELECT d.diet_id,
@@ -276,5 +247,14 @@
         UPDATE
             water_goal = GREATEST(0, water_goal + #{delta})
     </insert>
+
+
+    <select id="selectMonthlyDiets" resultType="com.ssafy.bapai.diet.dto.DietDto">
+        SELECT *
+        FROM diet
+        WHERE user_id = #{userId}
+          AND eat_date LIKE CONCAT(#{yearMonth}, '%')
+        ORDER BY eat_date ASC
+    </select>
 
 </mapper>

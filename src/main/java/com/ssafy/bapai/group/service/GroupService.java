@@ -60,4 +60,5 @@ public interface GroupService {
 
     void removeGroup(Long groupId, Long userId);
 
+    List<GroupRankDto> getDietRanking(Long groupId, String period);
 }

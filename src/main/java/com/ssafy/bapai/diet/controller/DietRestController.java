@@ -316,6 +316,30 @@ public class DietRestController {
 
         return ResponseEntity.ok(Map.of("message", "물 목표량이 변경되었습니다."));
     }
+
+    @GetMapping("/daily/{date}")
+    @Operation(summary = "나의 일간 식단 및 점수 조회")
+    public ResponseEntity<?> getMyDailyReport(
+            @RequestHeader("Authorization") String token,
+            @PathVariable String date) {
+        Long userId = jwtUtil.getUserId(token.substring(7));
+
+        // AiService에서 이미 구현된 getDailyReport를 활용하여
+        // 해당 날짜의 식단 리스트와 AI 총평(점수 기반 분석)을 반환합니다.
+        return ResponseEntity.ok(aiService.getDailyReport(userId, date));
+    }
+
+    @GetMapping("/stats/period")
+    @Operation(summary = "나의 주간/월간 평균 점수 및 분석 조회")
+    public ResponseEntity<?> getMyPeriodReport(
+            @RequestHeader("Authorization") String token,
+            @RequestParam String type) { // WEEKLY or MONTHLY
+        Long userId = jwtUtil.getUserId(token.substring(7));
+
+        // AiService의 getPeriodReport는 평균 점수(averageScore)와
+        // 점수 추이(scoreTrend)를 포함하여 반환합니다.
+        return ResponseEntity.ok(aiService.getPeriodReport(userId, type));
+    }
 }
 
 @lombok.Data

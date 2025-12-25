@@ -69,32 +69,26 @@ public class GroupServiceImpl implements GroupService {
         if (keyword != null && !keyword.trim().isEmpty()) {
             keywordList = Arrays.asList(keyword.split("[\\s,]+"));
             params.put("keywordList", keywordList);
+            // ★ 추가: XML에서 발생하던 리플렉션 오류를 방지하기 위해 크기를 직접 전달
+            params.put("keywordListSize", keywordList.size());
         }
 
         // 1. 목록 조회
         List<GroupDto> list = groupDao.selectGroupList(params);
 
-//        for (GroupDto g : list) {
-//            g.setTags(groupDao.selectGroupTags(g.getGroupId()));
-//            if (userId != null) {
-//                g.setJoined(groupDao.checkJoined(g.getGroupId(), userId) > 0);
-//                g.setOwner(g.getOwnerId().equals(userId));
-//            }
-//        }
         for (GroupDto g : list) {
             g.setTags(groupDao.selectGroupTags(g.getGroupId()));
             if (userId != null) {
                 String role = groupDao.selectMyRole(g.getGroupId(), userId);
-                if (role == null) {
-                    role = "NONE";
-                }
-                g.setRole(role);
+                g.setRole(role == null ? "NONE" : role);
             } else {
                 g.setRole("NONE");
             }
         }
+
         // 2. 전체 개수 조회
-        long totalElements = groupDao.countAllGroups(keywordList);
+        // ★ 수정: 파라미터 맵(params)을 통째로 넘겨서 키워드와 크기 정보를 모두 전달
+        long totalElements = groupDao.countAllGroups(params);
 
         // 3. PageResponse 생성
         return new PageResponse<>(list, page, size, totalElements);
@@ -427,4 +421,24 @@ public class GroupServiceImpl implements GroupService {
         groupDao.deleteGroup(groupId);
     }
 
+    @Override
+    public List<GroupRankDto> getDietRanking(Long groupId, String period) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("groupId", groupId);
+        params.put("period", period); // daily, weekly, monthly
+        params.put("limit", 10); // 상위 10명
+
+        if ("monthly".equals(period)) {
+            // 현재 연도-월 추출 (예: 2025-12)
+            params.put("currentMonth", java.time.LocalDate.now().toString().substring(0, 7));
+        }
+
+        List<GroupRankDto> list = groupDao.selectGroupRankingByDiet(params);
+
+        // 순위(Rank) 자동 부여
+        for (int i = 0; i < list.size(); i++) {
+            list.get(i).setRank(i + 1);
+        }
+        return list;
+    }
 }

@@ -136,12 +136,12 @@ public class GroupController {
         groupService.delegateOwner(groupId, jwtUtil.getUserId(token.substring(7)), newOwnerId);
         return ResponseEntity.ok(Map.of("message", "방장 권한을 위임했습니다."));
     }
-
-    @GetMapping("/{groupId}/ranking")
-    @Operation(summary = "모임 내 랭킹 조회")
-    public ResponseEntity<List<GroupRankDto>> ranking(@PathVariable Long groupId) {
-        return ResponseEntity.ok(groupService.getGroupRanking(groupId));
-    }
+//
+//    @GetMapping("/{groupId}/ranking")
+//    @Operation(summary = "모임 내 랭킹 조회")
+//    public ResponseEntity<List<GroupRankDto>> ranking(@PathVariable Long groupId) {
+//        return ResponseEntity.ok(groupService.getGroupRanking(groupId));
+//    }
 
     @GetMapping("/tags")
     @Operation(summary = "해시태그 목록 조회")
@@ -221,4 +221,11 @@ public class GroupController {
         }
     }
 
+    @GetMapping("/{groupId}/ranking/diet")
+    @Operation(summary = "모임 내 식단 점수 랭킹 조회", description = "period: daily, weekly, monthly")
+    public ResponseEntity<List<GroupRankDto>> dietRanking(
+            @PathVariable Long groupId,
+            @RequestParam(defaultValue = "weekly") String period) {
+        return ResponseEntity.ok(groupService.getDietRanking(groupId, period));
+    }
 }

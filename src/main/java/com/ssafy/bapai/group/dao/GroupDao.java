@@ -72,11 +72,13 @@ public interface GroupDao {
 
     void deleteAllGroupHashtags(Long groupId);
 
+    long countAllGroups(Map<String, Object> params);
 
     void deleteAllGroupMembers(long groupId);
 
     void deleteAllGroupHashtags(long groupId);
 
+    List<GroupRankDto> selectGroupRankingByDiet(Map<String, Object> params);
 
     void deleteGroup(long groupId);
 }
