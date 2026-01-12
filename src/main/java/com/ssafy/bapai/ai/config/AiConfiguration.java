@@ -24,7 +24,6 @@ public class AiConfiguration {
     @Value("${spring.ai.openai.base-url}")
     private String openAiUrl;
 
-    // ✅ 모델/온도: 환경변수로 스위치 가능
     @Value("${APP_AI_VISION_MODEL:gpt-4o}")
     private String visionModel;
 
@@ -37,7 +36,7 @@ public class AiConfiguration {
     @Value("${APP_AI_REPORT_TEMPERATURE:0.7}")
     private Double reportTemp;
 
-    // ✅ 네트워크 무한대기 방지(장애 시 스레드 고갈/지연 방지)
+    // 네트워크 무한대기 방지(장애 시 스레드 고갈/지연 방지)
     @Bean
     public RestClient.Builder restClientBuilder() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
@@ -73,13 +72,13 @@ public class AiConfiguration {
     @Bean(name = "reportChatModel")
     public ChatModel reportChatModel(RestClient.Builder restClientBuilder) {
         OpenAiApi api = OpenAiApi.builder()
-                .baseUrl(openAiUrl) // ✅ 둘 다 OpenAI 호환 GMS로 통일
+                .baseUrl(openAiUrl) // 둘 다 OpenAI 호환 GMS로 통일
                 .apiKey(openAiKey)
                 .restClientBuilder(restClientBuilder)
                 .build();
 
         return new OpenAiChatModel(api, OpenAiChatOptions.builder()
-                .model(reportModel) // ✅ 기본 gpt-5 (미지원/불안정하면 gpt-4.1로 env 변경)
+                .model(reportModel) // 기본 gpt-5 (미지원/불안정하면 gpt-4.1로 env 변경)
 
                 .build());
     }
